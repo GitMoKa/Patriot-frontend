@@ -1,0 +1,224 @@
+{
+    "auth-sessions": {
+        "login": {
+            "method": "POST",
+            "path": "/auth-sessions/email",
+            "body": {
+                "email": "string",
+                "password": "string"
+            },
+            "response": {
+                "user": "IUser",
+                "accessToken": "string",
+                "refreshToken": "string"
+            }
+        },
+        "refresh": {
+            "method": "POST",
+            "path": "/auth-sessions/refresh",
+            "body": {
+                "refreshToken": "string"
+            },
+            "response": {
+                "accessToken": "string"
+            }
+        }
+    },
+    "users": {
+        "addUser": {
+            "method": "POST",
+            "path": "/users",
+            "body": "IUser",
+            "response": {
+                "id": "string",
+                "name": "string"
+            }
+        },
+        "getAllUsers": {
+            "method": "GET",
+            "path": "/users"
+        },
+        "getMe": {
+            "method": "GET",
+            "path": "/users/me"
+        },
+        "updateMe": {
+            "method": "PATCH",
+            "path": "/users/me",
+            "body": "Partial<User>"
+        },
+        "updateUser": {
+            "method": "PATCH",
+            "path": "/users/:id",
+            "body": "Partial<User>"
+        },
+        "forgotPassword": {
+            "method": "POST",
+            "path": "/users/forgot-password",
+            "body": {
+                "email": "string"
+            }
+        },
+        "resetPassword": {
+            "method": "POST",
+            "path": "/users/reset-password",
+            "body": {
+                "email": "string",
+                "code": "string",
+                "password": "string"
+            }
+        },
+        "updatePassword": {
+            "method": "POST",
+            "path": "/users/update-password",
+            "body": {
+                "currentPassword": "string",
+                "newPassword": "string"
+            }
+        }
+    },
+    "orders": {
+        "createOrder": {
+            "method": "POST",
+            "path": "/orders",
+            "body": "CreateOrderDto"
+        },
+        "glassCutting": {
+            "method": "POST",
+            "path": "/orders/glass-cutting",
+            "body": "GlassCuttingDto"
+        },
+        "verifyCode": {
+            "method": "POST",
+            "path": "/orders/:id/verify-code",
+            "body": "VerifyOrderCodeDto"
+        },
+        "getAllOrders": {
+            "method": "GET",
+            "path": "/orders",
+            "query": "GetAllOrdersDto"
+        },
+        "getOrderById": {
+            "method": "GET",
+            "path": "/orders/:id"
+        },
+        "updateOrder": {
+            "method": "PATCH",
+            "path": "/orders/:id",
+            "body": "UpdateOrderDto"
+        },
+        "deleteOrder": {
+            "method": "DELETE",
+            "path": "/orders/:id"
+        },
+        "getOrderItems": {
+            "method": "GET",
+            "path": "/orders/:id/items"
+        },
+        "updateOrderItem": {
+            "method": "PATCH",
+            "path": "/orders/:orderId/items/:itemId",
+            "body": "UpdateOrderItemDto"
+        }
+    },
+    "materials": {
+        "createMaterial": {
+            "method": "POST",
+            "path": "/materials",
+            "body": "CreateMaterialDto"
+        },
+        "getAllMaterials": {
+            "method": "GET",
+            "path": "/materials"
+        },
+        "getMaterialById": {
+            "method": "GET",
+            "path": "/materials/:id"
+        },
+        "updateMaterial": {
+            "method": "PATCH",
+            "path": "/materials/:id",
+            "body": "UpdateMaterialDto"
+        },
+        "deleteMaterial": {
+            "method": "DELETE",
+            "path": "/materials/:id"
+        }
+    },
+    "products": {
+        "createProduct": {
+            "method": "POST",
+            "path": "/products",
+            "body": "CreateProductDto"
+        },
+        "getAllProducts": {
+            "method": "GET",
+            "path": "/products"
+        },
+        "getProductReviews": {
+            "method": "GET",
+            "path": "/products/:id/reviews"
+        },
+        "getProductById": {
+            "method": "GET",
+            "path": "/products/:id"
+        },
+        "updateProduct": {
+            "method": "PATCH",
+            "path": "/products/:id",
+            "body": "UpdateProductDto"
+        },
+        "deleteProduct": {
+            "method": "DELETE",
+            "path": "/products/:id"
+        }
+    },
+    "categories": {
+        "createCategory": {
+            "method": "POST",
+            "path": "/categories",
+            "body": "CreateCategoryDto"
+        },
+        "getAllCategories": {
+            "method": "GET",
+            "path": "/categories"
+        },
+        "getCategoryById": {
+            "method": "GET",
+            "path": "/categories/:id"
+        },
+        "updateCategory": {
+            "method": "PATCH",
+            "path": "/categories/:id",
+            "body": "UpdateCategoryDto"
+        },
+        "deleteCategory": {
+            "method": "DELETE",
+            "path": "/categories/:id"
+        }
+    },
+    "stages": {
+        "createStage": {
+            "method": "POST",
+            "path": "/stages",
+            "body": "CreateStageDto"
+        },
+        "getAllStages": {
+            "method": "GET",
+            "path": "/stages"
+        },
+        "getStageById": {
+            "method": "GET",
+            "path": "/stages/:id"
+        },
+        "updateStage": {
+            "method": "PATCH",
+            "path": "/stages/:id",
+            "body": "UpdateStageDto"
+        },
+        "deleteStage": {
+            "method": "DELETE",
+            "path": "/stages/:id"
+        }
+    }
+}

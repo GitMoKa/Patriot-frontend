@@ -1,0 +1,545 @@
+{
+  "auth-sessions": {
+    "controller": "auth-sessions.controller.ts",
+    "routes": [
+      {
+        "path": "/auth-sessions/email",
+        "method": "POST",
+        "request_body": {
+          "email": "string",
+          "password": "string"
+        },
+        "response": "{ accessToken: string, refreshToken: string }"
+      },
+      {
+        "path": "/auth-sessions/refresh",
+        "method": "POST",
+        "request_body": {
+          "refreshToken": "string"
+        },
+        "response": "{ accessToken: string, refreshToken: string }"
+      }
+    ]
+  },
+  "aws": {
+    "controller": "media.controller.ts",
+    "routes": [
+      {
+        "path": "/media/pre-signed",
+        "method": "POST",
+        "request_body": {
+          "userId": "string",
+          "fileName": "string",
+          "contentType": "string"
+        },
+        "response": "{ url: string }"
+      }
+    ]
+  },
+  "categories": {
+    "controller": "category.controller.ts",
+    "routes": [
+      {
+        "path": "/categories",
+        "method": "POST",
+        "request_body": {
+          "name": "LocalizedString",
+          "description": "LocalizedString (optional)",
+          "imageUrl": "string (optional)"
+        },
+        "response": "Category or Category[]"
+      },
+      {
+        "path": "/categories",
+        "method": "GET",
+        "request_body": null,
+        "response": "Category[]"
+      },
+      {
+        "path": "/categories/:id",
+        "method": "GET",
+        "request_body": null,
+        "response": "Category"
+      },
+      {
+        "path": "/categories/:id",
+        "method": "PATCH",
+        "request_body": {
+          "name": "LocalizedString (optional)",
+          "description": "LocalizedString (optional)",
+          "imageUrl": "string (optional)"
+        },
+        "response": "Category"
+      },
+      {
+        "path": "/categories/:id",
+        "method": "DELETE",
+        "request_body": null,
+        "response": "204 No Content"
+      }
+    ]
+  },
+  "complaints": {
+    "controller": "complaint.controller.ts",
+    "routes": [
+      {
+        "path": "/complaints",
+        "method": "POST",
+        "request_body": {
+          "description": "string",
+          "fileUrl": "string (optional)",
+          "type": "string (optional)",
+          "location": "string (optional)"
+        },
+        "response": "Complaint or Complaint[]"
+      },
+      {
+        "path": "/complaints",
+        "method": "GET",
+        "request_body": null,
+        "response": "Complaint[]"
+      },
+      {
+        "path": "/complaints/:id",
+        "method": "GET",
+        "request_body": null,
+        "response": "Complaint"
+      },
+      {
+        "path": "/complaints/:id",
+        "method": "PATCH",
+        "request_body": {
+          "description": "string (optional)",
+          "fileUrl": "string (optional)",
+          "status": "ComplaintStatus (optional)",
+          "closedById": "string | null (optional)",
+          "closedBy": "User (optional)",
+          "type": "string (optional)",
+          "location": "string (optional)"
+        },
+        "response": "Complaint"
+      },
+      {
+        "path": "/complaints/:id",
+        "method": "DELETE",
+        "request_body": null,
+        "response": "204 No Content"
+      }
+    ]
+  },
+  "home": {
+    "controller": "home.controller.ts",
+    "routes": [
+      {
+        "path": "/home/statistics",
+        "method": "GET",
+        "request_body": null,
+        "response": "object"
+      },
+      {
+        "path": "/home/me/statistics",
+        "method": "GET",
+        "request_body": null,
+        "response": "object"
+      }
+    ]
+  },
+  "materials": {
+    "controller": "material.controller.ts",
+    "routes": [
+      {
+        "path": "/materials",
+        "method": "POST",
+        "request_body": {
+          "name": "LocalizedString",
+          "description": "LocalizedString (optional)",
+          "imageUrl": "string (optional)",
+          "height": "number (optional)",
+          "width": "number (optional)",
+          "quantity": "number (optional)",
+          "type": "MaterialType",
+          "location": "string (optional)"
+        },
+        "response": "Material"
+      },
+      {
+        "path": "/materials",
+        "method": "GET",
+        "request_body": null,
+        "response": "Material[]"
+      },
+      {
+        "path": "/materials/:id",
+        "method": "GET",
+        "request_body": null,
+        "response": "Material"
+      },
+      {
+        "path": "/materials/:id",
+        "method": "PATCH",
+        "request_body": {
+          "name": "LocalizedString (optional)",
+          "description": "LocalizedString (optional)",
+          "imageUrl": "string (optional)",
+          "height": "number (optional)",
+          "width": "number (optional)",
+          "quantity": "number (optional)",
+          "type": "MaterialType",
+          "location": "string (optional)"
+        },
+        "response": "Material"
+      },
+      {
+        "path": "/materials/:id",
+        "method": "DELETE",
+        "request_body": null,
+        "response": "204 No Content"
+      }
+    ]
+  },
+  "notifications": {
+    "controller": "notification.controller.ts",
+    "routes": [
+      {
+        "path": "/notifications",
+        "method": "GET",
+        "request_body": null,
+        "response": "Notification[]"
+      },
+      {
+        "path": "/notifications/unread",
+        "method": "GET",
+        "request_body": null,
+        "response": "Notification[]"
+      },
+      {
+        "path": "/notifications/unread-count",
+        "method": "GET",
+        "request_body": null,
+        "response": "{ count: number }"
+      },
+      {
+        "path": "/notifications/dismiss",
+        "method": "POST",
+        "request_body": {
+          "notificationIds": "string[]"
+        },
+        "response": "void"
+      },
+      {
+        "path": "/notifications/:id",
+        "method": "GET",
+        "request_body": null,
+        "response": "Notification"
+      },
+      {
+        "path": "/notifications/:id",
+        "method": "DELETE",
+        "request_body": null,
+        "response": "204 No Content"
+      }
+    ]
+  },
+  "orders": {
+    "controller": "orders.controller.ts",
+    "routes": [
+      {
+        "path": "/orders",
+        "method": "POST",
+        "request_body": {
+          "priority": "OrderPriority",
+          "type": "OrderType",
+          "note": "string (optional)",
+          "status": "OrderStatus (optional)",
+          "userId": "string (optional)",
+          "driverId": "string (optional)",
+          "items": [
+            {
+              "width": "number",
+              "height": "number",
+              "productId": "string (optional)",
+              "materialId": "string (optional)",
+              "stageIds": "string[] (optional)",
+              "stages": "Stage[] (optional)",
+              "currentStage": "Stage",
+              "currentStageId": "string (optional)"
+            }
+          ]
+        },
+        "response": "Order"
+      },
+      {
+        "path": "/orders",
+        "method": "GET",
+        "request_body": {
+          "status": "OrderStatus (optional)",
+          "priority": "OrderPriority (optional)"
+        },
+        "response": "Order[]"
+      },
+      {
+        "path": "/orders/:id",
+        "method": "GET",
+        "request_body": null,
+        "response": "Order"
+      },
+      {
+        "path": "/orders/:id",
+        "method": "PATCH",
+        "request_body": {
+          "priority": "OrderPriority (optional)",
+          "note": "string (optional)",
+          "status": "OrderStatus (optional)",
+          "driverId": "string (optional)",
+          "driver": "any (optional)"
+        },
+        "response": "Order"
+      },
+      {
+        "path": "/orders/:id",
+        "method": "DELETE",
+        "request_body": null,
+        "response": "void"
+      },
+      {
+        "path": "/orders/:id/items",
+        "method": "GET",
+        "request_body": null,
+        "response": "OrderItem[]"
+      },
+      {
+        "path": "/orders/:id/verify-code",
+        "method": "POST",
+        "request_body": {
+          "code": "string"
+        },
+        "response": "{ isValid: boolean, message?: string }"
+      },
+      {
+        "path": "/orders/:orderId/items/:itemId",
+        "method": "PATCH",
+        "request_body": {
+          "currentStage": "Stage (optional)",
+          "currentStageId": "string (optional)",
+          "employeeId": "string (optional)",
+          "employee": "IUser (optional)",
+          "status": "OrderItemStatus (optional)"
+        },
+        "response": "OrderItem"
+      }
+    ]
+  },
+  "permissions": {
+    "controller": "permission.controller.ts",
+    "routes": [
+      {
+        "path": "/permissions",
+        "method": "POST",
+        "request_body": {
+          "write": "boolean",
+          "read": "boolean",
+          "userId": "string",
+          "user": "IUser (optional)",
+          "feature": "PermissionFeature",
+          "accessType": "PermissionAccessType"
+        },
+        "response": "Permission or Permission[]"
+      },
+      {
+        "path": "/permissions",
+        "method": "GET",
+        "request_body": null,
+        "response": "Permission[]"
+      },
+      {
+        "path": "/permissions/:id",
+        "method": "GET",
+        "request_body": null,
+        "response": "Permission"
+      },
+      {
+        "path": "/permissions/:id",
+        "method": "PATCH",
+        "request_body": {
+          "feature": "string (optional)",
+          "write": "boolean (optional)",
+          "read": "boolean (optional)",
+          "accessType": "string (optional)"
+        },
+        "response": "Permission"
+      },
+      {
+        "path": "/permissions/:id",
+        "method": "DELETE",
+        "request_body": null,
+        "response": "204 No Content"
+      }
+    ]
+  },
+  "products": {
+    "controller": "prodcut.controller.ts",
+    "routes": [
+      {
+        "path": "/products",
+        "method": "POST",
+        "request_body": {
+          "name": "LocalizedString",
+          "description": "LocalizedString (optional)",
+          "imageUrl": "string (optional)",
+          "height": "number (optional)",
+          "width": "number (optional)",
+          "categoryId": "string"
+        },
+        "response": "Product or Product[]"
+      },
+      {
+        "path": "/products",
+        "method": "GET",
+        "request_body": null,
+        "response": "Product[]"
+      },
+      {
+        "path": "/products/:id",
+        "method": "GET",
+        "request_body": null,
+        "response": "Product"
+      },
+      {
+        "path": "/products/:id",
+        "method": "PATCH",
+        "request_body": {
+          "name": "LocalizedString (optional)",
+          "description": "LocalizedString (optional)",
+          "imageUrl": "string (optional)",
+          "height": "number (optional)",
+          "width": "number (optional)",
+          "categoryId": "string (optional)"
+        },
+        "response": "Product"
+      },
+      {
+        "path": "/products/:id",
+        "method": "DELETE",
+        "request_body": null,
+        "response": "204 No Content"
+      }
+    ]
+  },
+  "stages": {
+    "controller": "stage.controller.ts",
+    "routes": [
+      {
+        "path": "/stages",
+        "method": "POST",
+        "request_body": {
+          "id": "string",
+          "name": "LocalizedString",
+          "description": "LocalizedString (optional)",
+          "imageUrl": "string (optional)"
+        },
+        "response": "Stage"
+      },
+      {
+        "path": "/stages",
+        "method": "GET",
+        "request_body": null,
+        "response": "Stage[]"
+      },
+      {
+        "path": "/stages/:id",
+        "method": "GET",
+        "request_body": null,
+        "response": "Stage"
+      },
+      {
+        "path": "/stages/:id",
+        "method": "PATCH",
+        "request_body": {
+          "id": "string (optional)",
+          "name": "LocalizedString (optional)",
+          "description": "LocalizedString (optional)",
+          "imageUrl": "string (optional)"
+        },
+        "response": "Stage"
+      },
+      {
+        "path": "/stages/:id",
+        "method": "DELETE",
+        "request_body": null,
+        "response": "void"
+      }
+    ]
+  },
+  "users": {
+    "controller": "user.controller.ts",
+    "routes": [
+      {
+        "path": "/users",
+        "method": "POST",
+        "request_body": {
+          "id": "string",
+          "role": "UserRole",
+          "email": "string",
+          "password": "string",
+          "name": "string (optional)",
+          "photoUrl": "string (optional)",
+          "phoneNumber": "string (optional)",
+          "fcmToken": "string (optional)",
+          "refreshTokens": "RefreshToken[] (optional)"
+        },
+        "response": "User"
+      },
+      {
+        "path": "/users",
+        "method": "GET",
+        "request_body": null,
+        "response": "User[]"
+      },
+      {
+        "path": "/users/me",
+        "method": "GET",
+        "request_body": null,
+        "response": "User"
+      },
+      {
+        "path": "/users/me",
+        "method": "PATCH",
+        "request_body": "All properties of User are optional",
+        "response": "User"
+      },
+      {
+        "path": "/users/:id",
+        "method": "PATCH",
+        "request_body": "All properties of User are optional",
+        "response": "User"
+      },
+      {
+        "path": "/users/forgot-password",
+        "method": "POST",
+        "request_body": {
+          "email": "string"
+        },
+        "response": "{ message: string }"
+      },
+      {
+        "path": "/users/reset-password",
+        "method": "POST",
+        "request_body": {
+          "email": "string",
+          "code": "string",
+          "password": "string"
+        },
+        "response": "{ message: string }"
+      },
+      {
+        "path": "/users/update-password",
+        "method": "POST",
+        "request_body": {
+          "currentPassword": "string",
+          "newPassword": "string"
+        },
+        "response": "{ message: string }"
+      }
+    ]
+  }
+}
