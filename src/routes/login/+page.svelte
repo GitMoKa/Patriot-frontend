@@ -71,7 +71,7 @@
 			<!-- Logo -->
 			<div class="logo">
 				<div class="logo-icon">
-					<div class="diamond"></div>
+					<img src="/patriot-logo.jpg" alt="Patriot Glass Factory" class="logo-image" />
 				</div>
 			</div>
 			

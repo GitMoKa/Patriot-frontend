@@ -92,18 +92,18 @@
 	<title>{currentLang === 'ar' ? 'إنشاء حساب - الخطوة 1' : 'Sign Up - Step 1'} - Patriot Glass Factory</title>
 </svelte:head>
 
-<div class="signup-page" data-theme={currentTheme}>
-	<div class="signup-background">
+<div class="auth-page" data-theme={currentTheme}>
+	<div class="auth-background">
 		<img src="/glass-factory-bg.jpg" alt="Glass Factory Background" />
-		<div class="signup-overlay"></div>
+		<div class="auth-overlay"></div>
 	</div>
 	
-	<div class="signup-container">
-		<div class="signup-card">
+	<div class="auth-container">
+		<div class="auth-card">
 			<!-- Logo -->
 			<div class="logo">
 				<div class="logo-icon">
-					<div class="diamond"></div>
+					<img src="/patriot-logo.jpg" alt="Patriot Glass Factory" class="logo-image" />
 				</div>
 			</div>
 			
@@ -115,22 +115,22 @@
 			</div>
 			
 			<!-- Title -->
-			<h1 class="signup-title">
+			<h1 class="page-title">
 				{currentLang === 'ar' ? 'إنشاء حساب - الخطوة 1' : 'Create Account - Step 1'}
 			</h1>
-			<p class="signup-subtitle">
+			<p class="page-subtitle">
 				{currentLang === 'ar' ? 'أدخل بيانات تسجيل الدخول' : 'Enter your login credentials'}
 			</p>
 			
 			<!-- Error Message -->
 			{#if error}
-				<div class="error-message">
+				<div class="message message-error">
 					{error}
 				</div>
 			{/if}
 			
 			<!-- Signup Form -->
-			<form class="signup-form" on:submit|preventDefault={handleSignupStep1}>
+			<form class="form" on:submit|preventDefault={handleSignupStep1}>
 				<div class="form-group">
 					<label for="fullName" class="form-label">
 						{currentLang === 'ar' ? 'الاسم الكامل' : 'Full Name'}
@@ -197,7 +197,8 @@
 
 				<button
 					type="submit"
-					class="signup-button"
+					class="btn btn-primary btn-lg"
+					style="width: 100%;"
 					disabled={isLoading}
 				>
 					{#if isLoading}
@@ -211,10 +212,10 @@
 			</form>
 			
 			<!-- Links -->
-			<div class="signup-links">
+			<div class="form-links">
 				<p>
 					{currentLang === 'ar' ? 'لديك حساب بالفعل؟' : 'Already have an account?'}
-					<a href="/login" class="login-link">
+					<a href="/login" class="form-link">
 						{currentLang === 'ar' ? 'تسجيل الدخول' : 'Sign In'}
 					</a>
 				</p>
@@ -223,325 +224,4 @@
 	</div>
 </div>
 
-<style>
-	.signup-page {
-		min-height: 100vh;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		position: relative;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		padding: 2rem 1rem;
-	}
 
-	.signup-background {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		z-index: 0;
-	}
-
-	.signup-background img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		opacity: 0.3;
-	}
-
-	.signup-overlay {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		background: linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.8) 100%);
-	}
-
-	.signup-container {
-		position: relative;
-		z-index: 1;
-		width: 100%;
-		max-width: 450px;
-	}
-
-	.signup-card {
-		background: rgba(255, 255, 255, 0.95);
-		backdrop-filter: blur(10px);
-		border-radius: 20px;
-		padding: 3rem 2.5rem;
-		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-		border: 1px solid rgba(255, 255, 255, 0.2);
-	}
-
-	[data-theme="dark"] .signup-card {
-		background: rgba(30, 41, 59, 0.95);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-	}
-
-	.logo {
-		display: flex;
-		justify-content: center;
-		margin-bottom: 2rem;
-	}
-
-	.logo-icon {
-		width: 80px;
-		height: 80px;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		border-radius: 20px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-	}
-
-	.diamond {
-		width: 40px;
-		height: 40px;
-		background: white;
-		transform: rotate(45deg);
-		border-radius: 8px;
-	}
-
-	.progress-indicator {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		margin-bottom: 2rem;
-		gap: 1rem;
-	}
-
-	.step {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 600;
-		font-size: 1.1rem;
-		background: #e2e8f0;
-		color: #64748b;
-		transition: all 0.3s ease;
-	}
-
-	.step.active {
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-		box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-	}
-
-	.step-line {
-		width: 60px;
-		height: 2px;
-		background: #e2e8f0;
-	}
-
-	.signup-title {
-		text-align: center;
-		font-size: 2.5rem;
-		font-weight: 700;
-		color: #1e293b;
-		margin-bottom: 0.5rem;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-	}
-
-	[data-theme="dark"] .signup-title {
-		color: #f1f5f9;
-	}
-
-	.signup-subtitle {
-		text-align: center;
-		color: #64748b;
-		margin-bottom: 2rem;
-		font-size: 1.1rem;
-	}
-
-	[data-theme="dark"] .signup-subtitle {
-		color: #94a3b8;
-	}
-
-	.error-message {
-		background: #fee2e2;
-		border: 1px solid #fecaca;
-		color: #dc2626;
-		padding: 1rem;
-		border-radius: 12px;
-		margin-bottom: 1.5rem;
-		text-align: center;
-		font-weight: 500;
-	}
-
-	[data-theme="dark"] .error-message {
-		background: rgba(220, 38, 38, 0.1);
-		border: 1px solid rgba(220, 38, 38, 0.3);
-		color: #fca5a5;
-	}
-
-	.signup-form {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.form-label {
-		font-weight: 600;
-		color: #374151;
-		font-size: 0.95rem;
-	}
-
-	[data-theme="dark"] .form-label {
-		color: #d1d5db;
-	}
-
-	.form-input {
-		padding: 1rem 1.25rem;
-		border: 2px solid #e5e7eb;
-		border-radius: 12px;
-		font-size: 1rem;
-		transition: all 0.3s ease;
-		background: white;
-		color: #1f2937;
-	}
-
-	.form-input:focus {
-		outline: none;
-		border-color: #667eea;
-		box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-	}
-
-	[data-theme="dark"] .form-input {
-		background: #374151;
-		border-color: #4b5563;
-		color: #f9fafb;
-	}
-
-	[data-theme="dark"] .form-input:focus {
-		border-color: #667eea;
-		box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
-	}
-
-	.signup-button {
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-		border: none;
-		padding: 1.25rem 2rem;
-		border-radius: 12px;
-		font-size: 1.1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.3s ease;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		margin-top: 1rem;
-		box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-	}
-
-	.signup-button:hover:not(:disabled) {
-		transform: translateY(-2px);
-		box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
-	}
-
-	.signup-button:active:not(:disabled) {
-		transform: translateY(0);
-	}
-
-	.signup-button:disabled {
-		opacity: 0.7;
-		cursor: not-allowed;
-		transform: none;
-	}
-
-	.loading-spinner {
-		width: 20px;
-		height: 20px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-radius: 50%;
-		border-top-color: white;
-		animation: spin 1s ease-in-out infinite;
-	}
-
-	@keyframes spin {
-		to { transform: rotate(360deg); }
-	}
-
-	.signup-links {
-		text-align: center;
-		margin-top: 2rem;
-		padding-top: 2rem;
-		border-top: 1px solid #e5e7eb;
-	}
-
-	[data-theme="dark"] .signup-links {
-		border-top-color: #374151;
-	}
-
-	.signup-links p {
-		color: #6b7280;
-		margin: 0;
-	}
-
-	[data-theme="dark"] .signup-links p {
-		color: #9ca3af;
-	}
-
-	.login-link {
-		color: #667eea;
-		text-decoration: none;
-		font-weight: 600;
-		margin-left: 0.5rem;
-		transition: color 0.3s ease;
-	}
-
-	.login-link:hover {
-		color: #764ba2;
-		text-decoration: underline;
-	}
-
-	[data-theme="dark"] .login-link {
-		color: #818cf8;
-	}
-
-	[data-theme="dark"] .login-link:hover {
-		color: #a78bfa;
-	}
-
-	/* RTL Support */
-	[dir="rtl"] .signup-title {
-		text-align: center;
-	}
-
-	/* Responsive */
-	@media (max-width: 480px) {
-		.signup-card {
-			padding: 2rem 1.5rem;
-		}
-
-		.signup-title {
-			font-size: 2rem;
-		}
-
-		.logo-icon {
-			width: 60px;
-			height: 60px;
-		}
-
-		.diamond {
-			width: 30px;
-			height: 30px;
-		}
-	}
-</style>

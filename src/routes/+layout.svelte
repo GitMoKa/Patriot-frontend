@@ -5,6 +5,8 @@
 	import { authStore } from '$lib/stores/auth.js';
 	import { themeStore } from '$lib/stores/theme.js';
 	import { languageStore, t } from '$lib/stores/language.js';
+	import '$lib/styles/global.css';
+	import '$lib/styles/components.css';
 	
 	// Reactive statements
 	$: currentTheme = $themeStore;
