@@ -1,7 +1,7 @@
 import { authService } from './auth.js';
 
 // API Configuration and Base Service
-const API_BASE_URL = '/api'; // Update this to your backend URL
+const API_BASE_URL = 'https://patriot-backend-api-e8be76603d85.herokuapp.com/v1'; // Update this to your backend URL
 
 class ApiService {
 	constructor() {

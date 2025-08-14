@@ -35,11 +35,26 @@ export class OrdersService {
 				}
 			})();
 
-			if (userId) {
-				return response.filter(order => order.userId === userId);
-			} else {
+			if (!userId) {
 				throw new Error('401 Not Authorized: User not logged in.');
 			}
+
+			// Handle API response structure: { results: Order[], total: number }
+			let orders = [];
+			if (response.results && Array.isArray(response.results)) {
+				orders = response.results;
+			} else if (Array.isArray(response)) {
+				orders = response;
+			}
+
+			// Filter orders by user ID (check user.id in the order object)
+			const userOrders = orders.filter(order => order.user?.id === userId);
+			
+			return {
+				total: response.total || userOrders.length,
+				results: response.results || userOrders,
+				orders: userOrders
+			};
 		} catch (error) {
 			throw new Error('Failed to fetch orders: ' + error.message);
 		}
@@ -79,7 +94,17 @@ export class OrdersService {
 	async getOrderItems(orderId) {
 		try {
 			const response = await apiService.get(`/orders/${orderId}/items`);
-			return response;
+			
+			// Handle API response structure
+			if (response.result && Array.isArray(response.result)) {
+				return {
+					results: response.results,
+					items: response.result
+				};
+			}
+			
+			// Fallback for different response structures
+			return Array.isArray(response) ? response : [];
 		} catch (error) {
 			throw new Error('Failed to fetch order items: ' + error.message);
 		}

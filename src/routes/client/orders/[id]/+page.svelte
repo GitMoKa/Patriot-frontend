@@ -21,31 +21,16 @@
 		code: ''
 	};
 	
-	// Simulate API call to get order details
+	// Load order details from API
 	async function loadOrder() {
 		isLoading = true;
 		try {
-			// Simulate API call to GET /orders/:id
-			await new Promise(resolve => setTimeout(resolve, 1000));
+			// Import the orders service
+			const { ordersService } = await import('$lib/services/orders.js');
 			
-			// Mock data
-			order = {
-				id: orderId,
-				orderNumber: `ORD-${orderId.padStart(3, '0')}`,
-				status: 'pending',
-				totalAmount: 299.99,
-				customerName: 'John Doe',
-				customerEmail: 'john.doe@example.com',
-				customerPhone: '+1234567890',
-				shippingAddress: '123 Main St, City, State 12345',
-				createdAt: '2024-06-30T10:00:00Z',
-				updatedAt: '2024-06-30T10:00:00Z'
-			};
-			
-			editData = {
-				status: order.status,
-				shippingAddress: order.shippingAddress
-			};
+			// Get order details from API
+			const response = await ordersService.getOrderById(orderId);
+			order = response;
 			
 		} catch (error) {
 			console.error('Failed to load order:', error);
@@ -152,6 +137,7 @@
 	}
 	
 	function formatDate(dateString) {
+		if (!dateString) return 'N/A';
 		return new Date(dateString).toLocaleDateString('en-US', {
 			year: 'numeric',
 			month: 'short',
@@ -159,6 +145,19 @@
 			hour: '2-digit',
 			minute: '2-digit'
 		});
+	}
+	
+	function formatAddress(address) {
+		if (!address) return 'No address provided';
+		
+		const parts = [];
+		if (address.street1) parts.push(address.street1);
+		if (address.street2) parts.push(address.street2);
+		if (address.apartment) parts.push(`Apt ${address.apartment}`);
+		if (address.complex) parts.push(address.complex);
+		if (address.postalCode) parts.push(address.postalCode);
+		
+		return parts.join(', ') || 'Address incomplete';
 	}
 	
 	function formatCurrency(amount) {
@@ -197,11 +196,8 @@
 			<h1>Order Details</h1>
 		</div>
 		
-		{#if order && !isEditing}
+		{#if order}
 			<div class="header-actions">
-				<button class="btn btn-secondary" on:click={() => isEditing = true}>
-					Edit Order
-				</button>
 				{#if order.status === 'shipped'}
 					<button class="btn btn-primary" on:click={() => showVerifyCode = true}>
 						Verify Delivery
@@ -228,13 +224,15 @@
 		<div class="order-card">
 			<div class="order-header">
 				<div class="order-info">
-					<h2>{order.orderNumber}</h2>
+					<h2>#{order.ref || order.id}</h2>
 					<span class="order-status" style="background-color: {getStatusColor(order.status)}20; color: {getStatusColor(order.status)}">
 						{order.status.charAt(0).toUpperCase() + order.status.slice(1)}
 					</span>
 				</div>
-				<div class="order-amount">
-					{formatCurrency(order.totalAmount)}
+				<div class="order-priority">
+					<span class="priority-badge priority-{order.priority}">
+						{order.priority?.charAt(0).toUpperCase() + order.priority?.slice(1)} Priority
+					</span>
 				</div>
 			</div>
 			
@@ -244,15 +242,15 @@
 					<div class="info-grid">
 						<div class="info-item">
 							<label>Name:</label>
-							<span>{order.customerName}</span>
+							<span>{order.user?.name || 'Unknown'}</span>
 						</div>
 						<div class="info-item">
 							<label>Email:</label>
-							<span>{order.customerEmail}</span>
+							<span>{order.user?.email || 'No email'}</span>
 						</div>
 						<div class="info-item">
 							<label>Phone:</label>
-							<span>{order.customerPhone || 'Not provided'}</span>
+							<span>{order.user?.phoneNumber || 'Not provided'}</span>
 						</div>
 					</div>
 				</div>
@@ -262,21 +260,9 @@
 					<div class="info-grid">
 						<div class="info-item">
 							<label>Status:</label>
-							{#if isEditing}
-								<select bind:value={editData.status} class:error={errors.status} disabled={isLoading}>
-									<option value="pending">Pending</option>
-									<option value="shipped">Shipped</option>
-									<option value="completed">Completed</option>
-									<option value="cancelled">Cancelled</option>
-								</select>
-								{#if errors.status}
-									<span class="error-message">{errors.status}</span>
-								{/if}
-							{:else}
-								<span class="status-badge" style="background-color: {getStatusColor(order.status)}20; color: {getStatusColor(order.status)}">
-									{order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-								</span>
-							{/if}
+							<span class="status-badge" style="background-color: {getStatusColor(order.status)}20; color: {getStatusColor(order.status)}">
+								{order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+							</span>
 						</div>
 						<div class="info-item">
 							<label>Created:</label>
@@ -290,20 +276,14 @@
 					
 					<div class="info-item full-width">
 						<label>Shipping Address:</label>
-						{#if isEditing}
-							<textarea
-								bind:value={editData.shippingAddress}
-								class:error={errors.shippingAddress}
-								disabled={isLoading}
-								rows="3"
-							></textarea>
-							{#if errors.shippingAddress}
-								<span class="error-message">{errors.shippingAddress}</span>
-							{/if}
-						{:else}
-							<span>{order.shippingAddress}</span>
-						{/if}
+						<span>{formatAddress(order.address)}</span>
 					</div>
+					{#if order.note}
+						<div class="info-item full-width">
+							<label>Note:</label>
+							<span>{order.note}</span>
+						</div>
+					{/if}
 				</div>
 				
 				<div class="order-section">
@@ -839,6 +819,35 @@
 		.edit-actions {
 			flex-direction: column;
 		}
+	}
+	/* Priority badges */
+	.order-priority {
+		display: flex;
+		align-items: center;
+	}
+
+	.priority-badge {
+		padding: 0.25rem 0.75rem;
+		border-radius: 12px;
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.priority-low {
+		background-color: #dbeafe;
+		color: #1e40af;
+	}
+
+	.priority-medium {
+		background-color: #fef3c7;
+		color: #92400e;
+	}
+
+	.priority-high {
+		background-color: #fee2e2;
+		color: #dc2626;
 	}
 </style>
 

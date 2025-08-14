@@ -3,89 +3,199 @@
 	import { productsService } from '$lib/services/products.js';
 	import { categoriesService } from '$lib/services/categories.js';
 	import { materialsService } from '$lib/services/materials.js';
-	import { t } from '$lib/stores/language.js';
+	import { stagesService } from '$lib/services/stages.js';
+	import { t, languageStore } from '$lib/stores/language.js';
 
 	export let showModal = false;
 
 	const dispatch = createEventDispatcher();
 
-	let item = {
-		width: null,
-		height: null,
-		productId: null,
-		materialId: null,
-		currentStage: { id: 'initial', name: 'Initial Stage' }, // Placeholder
-		currentStageId: 'initial' // Placeholder
-	};
-
+	// Modal states
+	let currentStep = 1; // 1 = category/product selection, 2 = custom item details
+	
+	// Data arrays
 	let categories = [];
 	let products = [];
 	let materials = [];
-	let materialTypes = []; // Assuming material types are part of material data or a separate endpoint
+	let stages = [];
 
+	// Form data
 	let selectedCategory = null;
-	let selectedMaterialType = null;
+	let selectedProduct = null;
+	let customItem = {
+		width: 1,
+		height: 1,
+		materialId: null,
+		selectedStages: []
+	};
 
 	let isLoading = false;
 	let error = '';
+	
+	// Get current language
+	$: currentLang = $languageStore;
+	
+	// Helper function to get localized name
+	function getLocalizedName(item) {
+		if (!item || !item.name) return '';
+		if (typeof item.name === 'string') return item.name;
+		
+		// Use current language preference, fallback to English, then Arabic
+		return item.name[currentLang] || item.name.en || item.name.ar || '';
+	}
 
 	onMount(async () => {
-		isLoading = true;
-		error = '';
-		try {
-			categories = await categoriesService.getAllCategories();
-			materials = await materialsService.getAllMaterials();
-			// Assuming material types can be extracted from materials or fetched separately
-			materialTypes = [...new Set(materials.map(m => m.type))]; // Example: if materials have a 'type' property
-		} catch (err) {
-			error = t('Failed to load data: ' + err.message);
-		} finally {
-			isLoading = false;
+		if (showModal) {
+			await loadInitialData();
 		}
 	});
 
-	// Reactive statement to filter products by selected category
-	$: if (selectedCategory) {
-		// Assuming getProductsByCategory exists and filters on the backend
-		// If not, you'd fetch all products and filter client-side: products.filter(p => p.categoryId === selectedCategory.id)
-		productsService.getProductsByCategory(selectedCategory.id)
-			.then(data => products = data)
-			.catch(err => error = t('Failed to load products: ' + err.message));
-	} else {
-		products = [];
+	// Watch for modal opening to load data
+	$: if (showModal && categories.length === 0) {
+		loadInitialData();
 	}
 
-	// Reactive statement to filter materials by selected type
-	$: filteredMaterials = selectedMaterialType 
-		? materials.filter(m => m.type === selectedMaterialType) 
-		: materials;
+	async function loadInitialData() {
+		isLoading = true;
+		error = '';
+		try {
+			const [categoriesResponse, materialsResponse, stagesResponse] = await Promise.all([
+				categoriesService.getAllCategories(),
+				materialsService.getAllMaterials(),
+				stagesService.getAllStages()
+			]);
+			
+			// Extract data from results
+			categories = categoriesResponse.results || categoriesResponse.categories || categoriesResponse;
+			materials = materialsResponse.results || materialsResponse.materials || materialsResponse;
+			stages = stagesResponse.results || stagesResponse.stages || stagesResponse;
+		} catch (err) {
+			error = 'Failed to load data: ' + err.message;
+		} finally {
+			isLoading = false;
+		}
+	}
 
-	function handleAddItem() {
-		// Basic validation
-		if (!item.width || !item.height || !item.productId || !item.materialId) {
-			error = t('Please fill all required fields.');
+	// Load products when category changes
+	$: if (selectedCategory) {
+		loadProductsByCategory();
+	} else {
+		products = [];
+		selectedProduct = null;
+	}
+
+	async function loadProductsByCategory() {
+		try {
+			if (selectedCategory === 'all-products') {
+				// Load all products in the system
+				const allProductsResponse = await productsService.getAllProducts();
+				products = allProductsResponse.products || allProductsResponse.result || allProductsResponse || [];
+			} else if (selectedCategory === 'no-category') {
+				// Load products with null category
+				const productsData = await productsService.getProductsByCategory(null);
+				products = Array.isArray(productsData) ? productsData : [];
+			} else {
+				// Get the localized category name
+				const categoryName = getLocalizedName(selectedCategory);
+				if (categoryName) {
+					const productsData = await productsService.getProductsByCategory(categoryName);
+					products = Array.isArray(productsData) ? productsData : [];
+				}
+			}
+		} catch (err) {
+			error = 'Failed to load products: ' + err.message;
+			products = [];
+		}
+	}
+
+	// Validate and constrain width/height inputs
+	function validateDimension(value, field) {
+		let numValue = parseInt(value);
+		if (isNaN(numValue) || numValue < 1) {
+			numValue = 1;
+		} else if (numValue > 250) {
+			numValue = 250;
+		}
+		customItem[field] = numValue;
+	}
+
+	function handleNextStep() {
+		if (!selectedProduct) {
+			error = 'Please select a product.';
 			return;
 		}
 
-		dispatch('addItem', item);
+		// Add product directly to order
+		const productItem = {
+			width: selectedProduct.width,
+			height: selectedProduct.height,
+			productId: selectedProduct.id,
+			categoryId: selectedCategory === 'no-category' ? undefined : selectedCategory?.id,
+			category: selectedCategory === 'no-category' ? undefined : selectedCategory,
+			currentStage: { id: '8ad600bc-4a2b-4953-9dd5-a4a9ba1e1978' },
+			currentStageId: '8ad600bc-4a2b-4953-9dd5-a4a9ba1e1978',
+			type: 'product'
+		};
+
+		dispatch('addItem', productItem);
+		closeModal();
+	}
+
+	function handleSkip() {
+		currentStep = 2;
+		error = '';
+	}
+
+	function handleConfirmCustomItem() {
+		// Validation - only stages are required
+		if (customItem.selectedStages.length === 0) {
+			error = 'Please select at least one stage.';
+			return;
+		}
+
+		// Add custom item to order
+		const newCustomItem = {
+			width: customItem.width,
+			height: customItem.height,
+			materialId: customItem.materialId || undefined,
+			material: customItem.materialId ? materials.find(m => m.id === customItem.materialId) : undefined,
+			stageIds: customItem.selectedStages.map(stage => stage.id),
+			stages: customItem.selectedStages,
+			currentStage: { id: '8ad600bc-4a2b-4953-9dd5-a4a9ba1e1978' },
+			currentStageId: '8ad600bc-4a2b-4953-9dd5-a4a9ba1e1978',
+			type: 'custom'
+		};
+
+		dispatch('addItem', newCustomItem);
 		closeModal();
 	}
 
 	function closeModal() {
 		showModal = false;
+		currentStep = 1;
 		error = '';
-		// Reset form fields
-		item = {
-			width: null,
-			height: null,
-			productId: null,
-			materialId: null,
-			currentStage: { id: 'initial', name: 'Initial Stage' },
-			currentStageId: 'initial'
-		};
+		
+		// Reset form data
 		selectedCategory = null;
-		selectedMaterialType = null;
+		selectedProduct = null;
+		products = [];
+		customItem = {
+			width: 1,
+			height: 1,
+			materialId: null,
+			selectedStages: []
+		};
+		
 		dispatch('close');
+	}
+
+	function toggleStage(stage) {
+		const index = customItem.selectedStages.findIndex(s => s.id === stage.id);
+		if (index > -1) {
+			customItem.selectedStages = customItem.selectedStages.filter(s => s.id !== stage.id);
+		} else {
+			customItem.selectedStages = [...customItem.selectedStages, stage];
+		}
 	}
 </script>
 
@@ -93,72 +203,122 @@
 <div class="modal-overlay" on:click|self={closeModal}>
 	<div class="modal-content" on:click|stopPropagation>
 		<div class="modal-header">
-			<h2>{t('addItem')}</h2>
+			<h2>
+				{#if currentStep === 1}
+					Add Item - Select Product
+				{:else}
+					Add Item - Custom Details
+				{/if}
+			</h2>
 			<button class="close-button" on:click={closeModal}>&times;</button>
 		</div>
 		<div class="modal-body">
 			{#if isLoading}
-				<p>{t('loadingData')}...</p>
+				<p>Loading data...</p>
 			{:else if error}
 				<div class="error-message">{error}</div>
-			{:else}
-				<form on:submit|preventDefault={handleAddItem}>
-					<div class="form-group">
-						<label for="width">{t('width')} *</label>
-						<input type="number" id="width" bind:value={item.width} required min="1">
-					</div>
-					<div class="form-group">
-						<label for="height">{t('height')} *</label>
-						<input type="number" id="height" bind:value={item.height} required min="1">
-					</div>
+			{/if}
 
+			{#if currentStep === 1}
+				<!-- Step 1: Category and Product Selection -->
+				<div class="step-content">
 					<div class="form-group">
-						<label for="materialType">{t('materialType')} *</label>
-						<select id="materialType" bind:value={selectedMaterialType} required>
-							<option value="">{t('selectMaterialType')}</option>
-							{#each materialTypes as type}
-								<option value={type}>{type}</option>
-							{/each}
-						</select>
-					</div>
-
-					<div class="form-group">
-						<label for="material">{t('material')} *</label>
-						<select id="material" bind:value={item.materialId} required disabled={!selectedMaterialType}>
-							<option value="">{t('selectMaterial')}</option>
-							{#each filteredMaterials as material}
-								<option value={material.id}>
-									{material.name.en || material.name}
-								</option>
-							{/each}
-						</select>
-					</div>
-
-					<div class="form-group">
-						<label for="category">{t('category')} *</label>
+						<label for="category">Category *</label>
 						<select id="category" bind:value={selectedCategory} required>
-							<option value="">{t('selectCategory')}</option>
+							<option value="">Select Category</option>
+							<option value="all-products">All Products</option>
+							<option value="no-category">No Category</option>
 							{#each categories as category}
-								<option value={category}>{category.name.en || category.name}</option>
+								<option value={category}>{getLocalizedName(category)}</option>
 							{/each}
 						</select>
 					</div>
 
 					<div class="form-group">
-						<label for="product">{t('product')} *</label>
-						<select id="product" bind:value={item.productId} required disabled={!selectedCategory}>
-							<option value="">{t('selectProduct')}</option>
+						<label for="product">Product *</label>
+						<select id="product" bind:value={selectedProduct} required disabled={!selectedCategory}>
+							<option value="">Select Product</option>
 							{#each products as product}
-								<option value={product.id}>{product.name.en || product.name}</option>
+								<option value={product}>{getLocalizedName(product)}</option>
 							{/each}
 						</select>
 					</div>
 
 					<div class="modal-actions">
-						<button type="button" class="cancel-button" on:click={closeModal}>{t('cancel')}</button>
-						<button type="submit" class="add-button">{t('add')}</button>
+						<button type="button" class="cancel-button" on:click={closeModal}>Cancel</button>
+						<button type="button" class="skip-button" on:click={handleSkip}>Skip</button>
+						<button type="button" class="next-button" on:click={handleNextStep} disabled={!selectedProduct}>Next Step</button>
 					</div>
-				</form>
+				</div>
+
+			{:else if currentStep === 2}
+				<!-- Step 2: Custom Item Details -->
+				<div class="step-content">
+					<div class="dimensions-row">
+						<div class="form-group">
+							<label for="width">Width *</label>
+							<input 
+								type="number" 
+								id="width" 
+								bind:value={customItem.width}
+								on:input={(e) => validateDimension(e.target.value, 'width')}
+								min="1" 
+								max="250" 
+								required
+							>
+						</div>
+						<div class="form-group">
+							<label for="height">Height *</label>
+							<input 
+								type="number" 
+								id="height" 
+								bind:value={customItem.height}
+								on:input={(e) => validateDimension(e.target.value, 'height')}
+								min="1" 
+								max="250" 
+								required
+							>
+						</div>
+					</div>
+
+					<div class="form-group">
+						<label for="material">Material (Optional)</label>
+						<select id="material" bind:value={customItem.materialId}>
+							<option value="">No Material</option>
+							{#each materials as material}
+								<option value={material.id}>{getLocalizedName(material)}</option>
+							{/each}
+						</select>
+					</div>
+
+					<div class="form-group">
+						<label>Stages * (Select multiple)</label>
+						<div class="stages-container">
+							{#each stages as stage}
+								<div class="stage-item">
+									<label class="stage-label">
+										<input 
+											type="checkbox" 
+											checked={customItem.selectedStages.some(s => s.id === stage.id)}
+											on:change={() => toggleStage(stage)}
+										>
+										<div class="stage-info">
+											<span class="stage-name">{getLocalizedName(stage)}</span>
+											{#if stage.description}
+												<span class="stage-description">{getLocalizedName({name: stage.description})}</span>
+											{/if}
+										</div>
+									</label>
+								</div>
+							{/each}
+						</div>
+					</div>
+
+					<div class="modal-actions">
+						<button type="button" class="cancel-button" on:click={closeModal}>Cancel</button>
+						<button type="button" class="confirm-button" on:click={handleConfirmCustomItem}>Confirm</button>
+					</div>
+				</div>
 			{/if}
 		</div>
 	</div>
@@ -279,6 +439,61 @@
 		color: #fca5a5;
 	}
 
+	.step-content {
+		padding: 1rem 0;
+	}
+
+	.dimensions-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.stages-container {
+		max-height: 200px;
+		overflow-y: auto;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		padding: 0.5rem;
+		background: var(--bg-secondary);
+	}
+
+	.stage-item {
+		margin-bottom: 0.5rem;
+	}
+
+	.stage-label {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		cursor: pointer;
+		padding: 0.5rem;
+		border-radius: 6px;
+		transition: background-color 0.2s;
+	}
+
+	.stage-label:hover {
+		background: var(--bg-primary);
+	}
+
+	.stage-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.stage-name {
+		font-weight: 500;
+		color: var(--text-primary);
+	}
+
+	.stage-description {
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+		line-height: 1.3;
+	}
+
 	.modal-actions {
 		display: flex;
 		justify-content: flex-end;
@@ -287,13 +502,16 @@
 	}
 
 	.cancel-button,
-	.add-button {
+	.next-button,
+	.skip-button,
+	.confirm-button {
 		padding: 0.75rem 1.5rem;
 		border-radius: 8px;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s ease;
 		font-size: 1rem;
+		border: none;
 	}
 
 	.cancel-button {
@@ -307,16 +525,35 @@
 		color: var(--text-primary);
 	}
 
-	.add-button {
+	.next-button,
+	.confirm-button {
 		background: linear-gradient(135deg, #3b82f6, #2563eb);
 		color: white;
-		border: none;
 		box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
 	}
 
-	.add-button:hover {
+	.next-button:hover:not(:disabled),
+	.confirm-button:hover:not(:disabled) {
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+	}
+
+	.skip-button {
+		background: linear-gradient(135deg, #f59e0b, #d97706);
+		color: white;
+		box-shadow: 0 2px 10px rgba(245, 158, 11, 0.3);
+	}
+
+	.skip-button:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+	}
+
+	.next-button:disabled,
+	.confirm-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+		transform: none;
 	}
 
 	/* Dark theme adjustments */
@@ -326,5 +563,35 @@
 
 	[dir="rtl"] .modal-actions {
 		justify-content: flex-start;
+	}
+
+	/* Responsive Design */
+	@media (max-width: 768px) {
+		.dimensions-row {
+			grid-template-columns: 1fr;
+		}
+
+		.modal-actions {
+			flex-direction: column;
+			gap: 0.75rem;
+		}
+
+		.cancel-button,
+		.next-button,
+		.skip-button,
+		.confirm-button {
+			width: 100%;
+			justify-content: center;
+		}
+
+		.modal-content {
+			width: 95%;
+			margin: 1rem;
+			max-height: 85vh;
+		}
+
+		.stages-container {
+			max-height: 150px;
+		}
 	}
 </style>

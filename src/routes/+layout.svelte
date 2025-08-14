@@ -89,7 +89,7 @@
 	
 	// Check if route requires authentication
 	function requiresAuth(path) {
-		const publicRoutes = ['/login', '/client/signup', '/client/signup/step1', '/client/signup/step2', '/client/forgot-password', '/client/reset-password'];
+		const publicRoutes = ['/login', '/client', '/client/signup', '/client/signup/step1', '/client/signup/step2', '/client/forgot-password', '/client/reset-password'];
 		return !publicRoutes.includes(path) && !path.startsWith('/products/');
 	}
 	

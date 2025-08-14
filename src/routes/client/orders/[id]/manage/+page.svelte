@@ -116,7 +116,7 @@
 			
 			// Uncomment when backend is ready
 			// const response = await ordersService.getOrderItems(orderId);
-			// orderItems = response.data || response;
+			// orderItems = response.items || response;
 		} catch (error) {
 			console.error('Failed to load order items:', error);
 		}
@@ -147,7 +147,7 @@
 			
 			// Uncomment when backend is ready
 			// const response = await categoriesService.getAllCategories();
-			// categories = response.data || response;
+			// categories = response.categories || response;
 		} catch (error) {
 			console.error('Failed to load categories:', error);
 		}
@@ -185,7 +185,7 @@
 			
 			// Uncomment when backend is ready
 			// const response = await productsService.getAllProducts();
-			// products = response.data || response;
+			// products = response.products || response;
 		} catch (error) {
 			console.error('Failed to load products:', error);
 		}
@@ -203,7 +203,7 @@
 			
 			// Uncomment when backend is ready
 			// const response = await materialsService.getAllMaterials();
-			// materials = response.data || response;
+			// materials = response.materials || response;
 		} catch (error) {
 			console.error('Failed to load materials:', error);
 		}

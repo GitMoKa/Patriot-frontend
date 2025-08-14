@@ -5,7 +5,7 @@ export default defineConfig({
 	plugins: [sveltekit()],
 	server: {
 		proxy: {
-			'/api': {
+			'/v1': {
 				target: 'https://patriot-backend-api-e8be76603d85.herokuapp.com',
 				changeOrigin: true,
 			},

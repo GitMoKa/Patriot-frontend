@@ -1,6 +1,9 @@
 <script>
 	import { onMount } from 'svelte';
 	import { authService } from '$lib/services/auth.js';
+	import { statesService } from '$lib/services/states.js';
+	import { citiesService } from '$lib/services/cities.js';
+	import { languageStore } from '$lib/stores/language.js';
 	
 	let isEditing = false;
 	let isLoading = false;
@@ -9,30 +12,87 @@
 		name: '',
 		email: '',
 		phoneNumber: '',
-		photoUrl: null
+		photoUrl: null,
+		address: null
 	};
 	
 	let editData = { ...profileData };
 	let photoPreview = null;
 	let errors = {};
 	
+	// Address-related data
+	let states = [];
+	let cities = [];
+	let selectedState = null;
+	let selectedCity = null;
+	
+	// Get current language
+	$: currentLang = $languageStore;
+	
+	// Helper function to get localized name
+	function getLocalizedName(item) {
+		if (!item || !item.name) return '';
+		if (typeof item.name === 'string') return item.name;
+		
+		// Use current language preference, fallback to English, then Arabic
+		return item.name[currentLang] || item.name.en || item.name.ar || '';
+	}
+	
 	async function loadProfile() {
 		isLoading = true;
 		try {
-			const user = await authService.getMe();
+			const [user, statesResponse] = await Promise.all([
+				authService.getMe(),
+				statesService.getAllStates()
+			]);
+			
 			profileData = {
 				id: user.id,
 				name: user.name || '',
 				email: user.email,
 				phoneNumber: user.phoneNumber || '',
-				photoUrl: user.photoUrl || null
+				photoUrl: user.photoUrl || null,
+				address: user.address || null
 			};
 			editData = { ...profileData };
+			
+			// Load states
+			states = statesResponse.results || statesResponse.states || statesResponse;
+			
+			// If user has an address, set the selected state and load cities
+			if (profileData.address) {
+				selectedState = profileData.address.state;
+				selectedCity = profileData.address.city || null;
+				if (selectedState) {
+					await loadCitiesForState(selectedState.id);
+				}
+			}
 		} catch (error) {
 			console.error('Failed to load profile:', error);
 			// Optionally, redirect to login if unauthorized or show an error message
 		} finally {
 			isLoading = false;
+		}
+	}
+
+	async function loadCitiesForState(stateId) {
+		try {
+			const citiesData = await citiesService.getCitiesByState(stateId);
+			cities = Array.isArray(citiesData) ? citiesData : [];
+		} catch (error) {
+			console.error('Failed to load cities:', error);
+			cities = [];
+		}
+	}
+
+	// Handle state selection
+	async function handleStateChange() {
+		if (selectedState) {
+			await loadCitiesForState(selectedState.id);
+			selectedCity = null; // Reset city selection when state changes
+		} else {
+			cities = [];
+			selectedCity = null;
 		}
 	}
 	
@@ -49,17 +109,63 @@
 				errors.email = 'Email is required';
 			}
 			
+			// Validate address if any address field is filled
+			const addressFields = editData.address || {};
+			const hasAnyAddressField = addressFields.street1 || addressFields.street2 || 
+				addressFields.postalCode || addressFields.apartment || addressFields.complex || 
+				selectedState || selectedCity;
+			
+			if (hasAnyAddressField) {
+				if (!selectedState) {
+					errors.state = 'State is required when providing address information';
+				}
+				if (!addressFields.street1?.trim()) {
+					errors.street1 = 'Street address is required when providing address information';
+				}
+				if (!addressFields.postalCode?.trim()) {
+					errors.postalCode = 'Postal code is required when providing address information';
+				}
+			}
+			
 			if (Object.keys(errors).length > 0) {
 				isLoading = false;
 				return;
 			}
 			
-			const updatedUser = await authService.updateMe({
+			// Prepare update data
+			const updateData = {
 				name: editData.name,
 				email: editData.email,
 				phoneNumber: editData.phoneNumber,
-				photoUrl: editData.photoUrl // Assuming photoUrl is a string URL or null
-			});
+				photoUrl: editData.photoUrl
+			};
+			
+			// Add address if provided
+			if (hasAnyAddressField && selectedState) {
+				updateData.address = {
+					stateId: selectedState.id,
+					state: selectedState,
+					street1: addressFields.street1?.trim(),
+					postalCode: addressFields.postalCode?.trim()
+				};
+				
+				// Add optional fields only if they have values
+				if (selectedCity) {
+					updateData.address.cityId = selectedCity.id;
+					updateData.address.city = selectedCity;
+				}
+				if (addressFields.street2?.trim()) {
+					updateData.address.street2 = addressFields.street2.trim();
+				}
+				if (addressFields.apartment?.trim()) {
+					updateData.address.apartment = addressFields.apartment.trim();
+				}
+				if (addressFields.complex?.trim()) {
+					updateData.address.complex = addressFields.complex.trim();
+				}
+			}
+			
+			const updatedUser = await authService.updateMe(updateData);
 			
 			profileData = { ...updatedUser };
 			isEditing = false;
@@ -109,6 +215,16 @@
 		editData = { ...profileData };
 		photoPreview = null;
 		errors = {};
+		
+		// Reset address-related data
+		if (profileData.address) {
+			selectedState = profileData.address.state;
+			selectedCity = profileData.address.city || null;
+		} else {
+			selectedState = null;
+			selectedCity = null;
+			cities = [];
+		}
 	}
 	
 	onMount(() => {
@@ -244,6 +360,162 @@
 							<div class="form-value">{profileData.phoneNumber || 'Not set'}</div>
 						{/if}
 					</div>
+				</div>
+				
+				<!-- Address Section -->
+				<div class="address-section">
+					<h3>Address Information</h3>
+					
+					{#if isEditing}
+						<div class="address-form">
+							<!-- Initialize address object if it doesn't exist -->
+							{#if !editData.address}
+								{editData.address = {}}
+							{/if}
+							
+							<div class="form-grid">
+								<!-- State Selection -->
+								<div class="form-group">
+									<label for="state">State *</label>
+									<select 
+										id="state" 
+										bind:value={selectedState} 
+										on:change={handleStateChange}
+										class:error={errors.state}
+										disabled={isLoading}
+									>
+										<option value={null}>Select State</option>
+										{#each states as state}
+											<option value={state}>{getLocalizedName(state)}</option>
+										{/each}
+									</select>
+									{#if errors.state}
+										<span class="error-message">{errors.state}</span>
+									{/if}
+								</div>
+								
+								<!-- City Selection -->
+								<div class="form-group">
+									<label for="city">City (Optional)</label>
+									<select 
+										id="city" 
+										bind:value={selectedCity}
+										disabled={isLoading || !selectedState}
+									>
+										<option value={null}>Select City</option>
+										{#each cities as city}
+											<option value={city}>{getLocalizedName(city)}</option>
+										{/each}
+									</select>
+								</div>
+								
+								<!-- Street 1 -->
+								<div class="form-group">
+									<label for="street1">Street Address *</label>
+									<input
+										type="text"
+										id="street1"
+										bind:value={editData.address.street1}
+										class:error={errors.street1}
+										disabled={isLoading}
+										placeholder="123 Main Street"
+									/>
+									{#if errors.street1}
+										<span class="error-message">{errors.street1}</span>
+									{/if}
+								</div>
+								
+								<!-- Street 2 -->
+								<div class="form-group">
+									<label for="street2">Street Address 2 (Optional)</label>
+									<input
+										type="text"
+										id="street2"
+										bind:value={editData.address.street2}
+										disabled={isLoading}
+										placeholder="Apt, Suite, Unit, etc."
+									/>
+								</div>
+								
+								<!-- Postal Code -->
+								<div class="form-group">
+									<label for="postalCode">Postal Code *</label>
+									<input
+										type="text"
+										id="postalCode"
+										bind:value={editData.address.postalCode}
+										class:error={errors.postalCode}
+										disabled={isLoading}
+										placeholder="12345"
+									/>
+									{#if errors.postalCode}
+										<span class="error-message">{errors.postalCode}</span>
+									{/if}
+								</div>
+								
+								<!-- Apartment -->
+								<div class="form-group">
+									<label for="apartment">Apartment (Optional)</label>
+									<input
+										type="text"
+										id="apartment"
+										bind:value={editData.address.apartment}
+										disabled={isLoading}
+										placeholder="Apt 123"
+									/>
+								</div>
+								
+								<!-- Complex -->
+								<div class="form-group">
+									<label for="complex">Complex (Optional)</label>
+									<input
+										type="text"
+										id="complex"
+										bind:value={editData.address.complex}
+										disabled={isLoading}
+										placeholder="Building or Complex Name"
+									/>
+								</div>
+							</div>
+						</div>
+					{:else}
+						<!-- Display Address -->
+						{#if profileData.address}
+							<div class="address-display">
+								<div class="address-line">
+									<strong>State:</strong> {getLocalizedName(profileData.address.state) || 'Not set'}
+								</div>
+								{#if profileData.address.city}
+									<div class="address-line">
+										<strong>City:</strong> {getLocalizedName(profileData.address.city)}
+									</div>
+								{/if}
+								<div class="address-line">
+									<strong>Street:</strong> {profileData.address.street1 || 'Not set'}
+								</div>
+								{#if profileData.address.street2}
+									<div class="address-line">
+										<strong>Street 2:</strong> {profileData.address.street2}
+									</div>
+								{/if}
+								<div class="address-line">
+									<strong>Postal Code:</strong> {profileData.address.postalCode || 'Not set'}
+								</div>
+								{#if profileData.address.apartment}
+									<div class="address-line">
+										<strong>Apartment:</strong> {profileData.address.apartment}
+									</div>
+								{/if}
+								{#if profileData.address.complex}
+									<div class="address-line">
+										<strong>Complex:</strong> {profileData.address.complex}
+									</div>
+								{/if}
+							</div>
+						{:else}
+							<div class="form-value">No address information provided</div>
+						{/if}
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -484,6 +756,92 @@
 		
 		.edit-actions {
 			flex-direction: column;
+		}
+	}
+	/* Address Section Styles */
+	.address-section {
+		margin-top: 2rem;
+		padding-top: 2rem;
+		border-top: 1px solid var(--border-color);
+	}
+
+	.address-section h3 {
+		margin: 0 0 1.5rem 0;
+		color: var(--text-primary);
+		font-size: 1.25rem;
+		font-weight: 600;
+	}
+
+	.address-form {
+		margin-top: 1rem;
+	}
+
+	.address-display {
+		background: var(--bg-light);
+		padding: 1.5rem;
+		border-radius: 12px;
+		border: 1px solid var(--border-color);
+	}
+
+	.address-line {
+		margin-bottom: 0.75rem;
+		color: var(--text-primary);
+	}
+
+	.address-line:last-child {
+		margin-bottom: 0;
+	}
+
+	.address-line strong {
+		display: inline-block;
+		width: 120px;
+		color: var(--text-secondary);
+		font-weight: 500;
+	}
+
+	/* Select styling for address dropdowns */
+	select {
+		width: 100%;
+		padding: 0.75rem;
+		border: 2px solid var(--border-color);
+		border-radius: 8px;
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		font-size: 1rem;
+		transition: all 0.3s ease;
+		appearance: none;
+		background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+		background-repeat: no-repeat;
+		background-position: right 0.75rem center;
+		background-size: 1rem;
+		padding-right: 2.5rem;
+	}
+
+	select:focus {
+		outline: none;
+		border-color: var(--primary-color);
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+	}
+
+	select:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+		background-color: var(--bg-light);
+	}
+
+	select.error {
+		border-color: var(--error-color);
+	}
+
+	/* Responsive adjustments for address section */
+	@media (max-width: 768px) {
+		.address-line strong {
+			width: 100px;
+			font-size: 0.9rem;
+		}
+		
+		.address-display {
+			padding: 1rem;
 		}
 	}
 </style>

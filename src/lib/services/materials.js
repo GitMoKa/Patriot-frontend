@@ -5,7 +5,17 @@ export class MaterialsService {
 	async getAllMaterials() {
 		try {
 			const response = await apiService.get('/materials');
-			return response;
+			
+			// Handle API response structure similar to products
+			if (response.result && Array.isArray(response.result)) {
+				return {
+					results: response.results,
+					materials: response.result
+				};
+			}
+			
+			// Fallback for different response structures
+			return Array.isArray(response) ? response : [];
 		} catch (error) {
 			throw new Error('Failed to fetch materials: ' + error.message);
 		}

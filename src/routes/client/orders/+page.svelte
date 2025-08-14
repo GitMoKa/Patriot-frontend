@@ -13,8 +13,10 @@
 	async function loadOrders() {
 		isLoading = true;
 		try {
-			orders = await ordersService.getAllOrders();
+			const response = await ordersService.getAllOrders();
+			orders = response.orders || response.results || response;
 			totalPages = Math.ceil(orders.length / itemsPerPage);
+			console.log(`Loaded ${response.total || orders.length} orders for current user`);
 		} catch (error) {
 			console.error('Failed to load orders:', error);
 		} finally {
@@ -48,6 +50,7 @@
 	}
 	
 	function formatDate(dateString) {
+		if (!dateString) return 'N/A';
 		return new Date(dateString).toLocaleDateString('en-US', {
 			year: 'numeric',
 			month: 'short',
@@ -55,6 +58,19 @@
 			hour: '2-digit',
 			minute: '2-digit'
 		});
+	}
+	
+	function formatAddress(address) {
+		if (!address) return 'No address provided';
+		
+		const parts = [];
+		if (address.street1) parts.push(address.street1);
+		if (address.street2) parts.push(address.street2);
+		if (address.apartment) parts.push(`Apt ${address.apartment}`);
+		if (address.complex) parts.push(address.complex);
+		if (address.postalCode) parts.push(address.postalCode);
+		
+		return parts.join(', ') || 'Address incomplete';
 	}
 	
 	function formatCurrency(amount) {
@@ -118,21 +134,39 @@
 				<div class="order-card">
 					<div class="order-header">
 						<div class="order-info">
-							<h3 class="order-number">{order.orderNumber}</h3>
+							<h3 class="order-number">#{order.ref || order.id}</h3>
 							<span class="order-status" style="background-color: {getStatusColor(order.status)}20; color: {getStatusColor(order.status)}">
 								{order.status.charAt(0).toUpperCase() + order.status.slice(1)}
 							</span>
 						</div>
-						<div class="order-amount">
-							{formatCurrency(order.totalAmount)}
+						<div class="order-priority">
+							<span class="priority-badge priority-{order.priority}">
+								{order.priority.charAt(0).toUpperCase() + order.priority.slice(1)} Priority
+							</span>
 						</div>
 					</div>
 					
 					<div class="order-details">
 						<p class="order-date">Created: {formatDate(order.createdAt)}</p>
-						<p class="order-items">
-							{order.items.length} item{order.items.length !== 1 ? 's' : ''}
+						<p class="order-date">Updated: {formatDate(order.updatedAt)}</p>
+						{#if order.note}
+							<p class="order-note">Note: {order.note}</p>
+						{/if}
+						<p class="order-address">
+							<strong>Address:</strong> {formatAddress(order.address)}
 						</p>
+						<p class="order-user">
+							<strong>Customer:</strong> {order.user?.name || 'Unknown'} ({order.user?.email || 'No email'})
+							{#if order.user?.phoneNumber}
+								- {order.user.phoneNumber}
+							{/if}
+						</p>
+						{#if order.outForDeliveryAt}
+							<p class="order-delivery">Out for delivery: {formatDate(order.outForDeliveryAt)}</p>
+						{/if}
+						{#if order.deliveredAt}
+							<p class="order-delivery">Delivered: {formatDate(order.deliveredAt)}</p>
+						{/if}
 					</div>
 					
 					<div class="order-actions">
@@ -440,6 +474,83 @@
 		
 		.order-actions {
 			flex-direction: column;
+		}
+	}
+	/* Priority badges */
+	.order-priority {
+		display: flex;
+		align-items: center;
+	}
+
+	.priority-badge {
+		padding: 0.25rem 0.75rem;
+		border-radius: 12px;
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.priority-low {
+		background-color: #dbeafe;
+		color: #1e40af;
+	}
+
+	.priority-medium {
+		background-color: #fef3c7;
+		color: #92400e;
+	}
+
+	.priority-high {
+		background-color: #fee2e2;
+		color: #dc2626;
+	}
+
+	/* Order details */
+	.order-note {
+		font-style: italic;
+		color: #6b7280;
+		margin: 0.5rem 0;
+		font-size: 0.875rem;
+	}
+
+	.order-address {
+		margin: 0.5rem 0;
+		font-size: 0.875rem;
+		line-height: 1.4;
+		color: #374151;
+	}
+
+	.order-delivery {
+		font-size: 0.875rem;
+		color: #059669;
+		font-weight: 500;
+		margin: 0.25rem 0;
+	}
+
+	.order-user {
+		margin: 0.5rem 0;
+		font-size: 0.875rem;
+		line-height: 1.4;
+		color: #374151;
+	}
+
+	/* Responsive adjustments */
+	@media (max-width: 768px) {
+		.order-actions {
+			flex-direction: column;
+			gap: 0.5rem;
+		}
+		
+		.btn-sm {
+			width: 100%;
+			justify-content: center;
+		}
+		
+		.order-header {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.75rem;
 		}
 	}
 </style>

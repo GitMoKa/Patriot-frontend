@@ -5,7 +5,17 @@ export class CategoriesService {
 	async getAllCategories() {
 		try {
 			const response = await apiService.get('/categories');
-			return response;
+			
+			// Handle API response structure similar to products
+			if (response.result && Array.isArray(response.result)) {
+				return {
+					results: response.results,
+					categories: response.result
+				};
+			}
+			
+			// Fallback for different response structures
+			return Array.isArray(response) ? response : [];
 		} catch (error) {
 			throw new Error('Failed to fetch categories: ' + error.message);
 		}

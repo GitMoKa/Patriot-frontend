@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth.js';
+	import { authService } from '$lib/services/auth.js';
 	import { languageStore, t } from '$lib/stores/language.js';
 	import { themeStore } from '$lib/stores/theme.js';
 	import { ordersService } from '$lib/services/orders.js';
@@ -45,11 +46,15 @@
 		error = '';
 		
 		try {
+			// Get user data to include address
+			const userData = await authService.getMe();
+			
 			// Construct the order payload to match the API schema
 			const payload = {
 				priority: orderData.priority,
 				type: orderData.type,
 				note: orderData.note,
+				address: userData.address || null,
 				items: orderData.items.map(item => ({
 					width: Number(item.width),
 					height: Number(item.height),

@@ -6,6 +6,9 @@
 	import { themeStore } from '$lib/stores/theme.js';
 	import { productsService } from '$lib/services/products.js';
 	import { categoriesService } from '$lib/services/categories.js';
+	import { reviewsService } from '$lib/services/reviews.js';
+	import ReviewModal from '$lib/components/ReviewModal.svelte';
+	import ReviewsList from '$lib/components/ReviewsList.svelte';
 	
 	let products = [];
 	let categories = [];
@@ -15,32 +18,57 @@
 	let searchQuery = '';
 	let showProductModal = false;
 	let selectedProduct = null;
+	let showReviewModal = false;
+	let productReviews = [];
+	let reviewsLoading = false;
 	
 	// Reactive statements
 	$: isAuthenticated = $authStore.isAuthenticated;
 	$: currentLang = $languageStore;
 	$: currentTheme = $themeStore;
 	
+	// Helper function to get localized name
+	function getLocalizedName(item) {
+		if (!item || !item.name) return '';
+		if (typeof item.name === 'string') return item.name;
+		
+		// Use current language preference, fallback to English, then Arabic
+		return item.name[currentLang] || item.name.en || item.name.ar || '';
+	}
+
 	// Filter products based on category and search
 	$: {
 		let filtered = products;
 		
 		// Filter by category
 		if (selectedCategory) {
-			filtered = filtered.filter(product => product.categoryId === selectedCategory.id);
+			filtered = filtered.filter(product => {
+				// Handle both string and object category formats
+				const productCategory = typeof product.category === 'string' 
+					? product.category 
+					: getLocalizedName(product.category);
+				
+				const selectedCategoryName = getLocalizedName(selectedCategory);
+				return productCategory === selectedCategoryName;
+			});
 		}
 		
 		// Filter by search query
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
-			filtered = filtered.filter(product => 
-				product.name.toLowerCase().includes(query) ||
-				product.description?.toLowerCase().includes(query)
-			);
+			filtered = filtered.filter(product => {
+				const name = getLocalizedName(product);
+				const description = getLocalizedName({name: product.description});
+				return name.toLowerCase().includes(query) || description.toLowerCase().includes(query);
+			});
 		}
 		
-		// Sort by name
-		filtered.sort((a, b) => a.name.localeCompare(b.name));
+		// Sort by localized name
+		filtered.sort((a, b) => {
+			const nameA = getLocalizedName(a);
+			const nameB = getLocalizedName(b);
+			return nameA.localeCompare(nameB);
+		});
 		
 		filteredProducts = filtered;
 	}
@@ -67,7 +95,8 @@
 	async function loadProducts() {
 		try {
 			const response = await productsService.getAllProducts();
-			products = response.data || response;
+			products = response.products || response.results || [];
+			console.log(`Loaded ${response.total || products.length} products from API`);
 		} catch (error) {
 			console.error('Failed to load products:', error);
 		}
@@ -75,9 +104,8 @@
 	
 	async function loadCategories() {
 		try {
-			// Uncomment when backend is ready
 			const response = await categoriesService.getAllCategories();
-			categories = response.data || response;
+			categories = response.results || response.categories || response;
 		} catch (error) {
 			console.error('Failed to load categories:', error);
 		}
@@ -100,14 +128,74 @@
 		goto(`/client/orders/create?productId=${product.id}`);
 	}
 	
-	function openProductModal(product) {
+	async function openProductModal(product) {
 		selectedProduct = product;
 		showProductModal = true;
+		await loadProductReviews(product.id);
 	}
 	
 	function closeProductModal() {
 		selectedProduct = null;
 		showProductModal = false;
+		productReviews = [];
+	}
+
+	async function loadProductReviews(productId) {
+		if (!productId) return;
+		
+		reviewsLoading = true;
+		try {
+			const response = await reviewsService.getProductReviews(productId);
+			// Response is directly an array of review objects
+			productReviews = Array.isArray(response) ? response : [];
+		} catch (error) {
+			console.error('Failed to load product reviews:', error);
+			productReviews = [];
+		} finally {
+			reviewsLoading = false;
+		}
+	}
+
+	function openReviewModal() {
+		if (!isAuthenticated) {
+			goto('/login');
+			return;
+		}
+		showReviewModal = true;
+	}
+
+	function closeReviewModal() {
+		showReviewModal = false;
+	}
+
+	async function handleReviewSubmit(event) {
+		try {
+			console.log('Submitting review data:', event.detail);
+			const response = await reviewsService.createReview(event.detail);
+			console.log('Review submission response:', response);
+			closeReviewModal();
+			// Reload reviews to show the new one
+			await loadProductReviews(selectedProduct.id);
+			alert($languageStore === 'ar' ? 'تم إرسال المراجعة بنجاح!' : 'Review submitted successfully!');
+		} catch (error) {
+			console.error('Failed to submit review - Full error:', error);
+			console.error('Error message:', error.message);
+			console.error('Error status:', error.response?.status);
+			console.error('Error response:', error.response);
+			
+			// Show more specific error message based on status
+			let errorMessage = $languageStore === 'ar' ? 'فشل في إرسال المراجعة' : 'Failed to submit review';
+			if (error.message.includes('401')) {
+				errorMessage = $languageStore === 'ar' ? 'يجب تسجيل الدخول أولاً' : 'Please login first';
+			} else if (error.message.includes('400')) {
+				errorMessage = $languageStore === 'ar' ? 'بيانات المراجعة غير صحيحة' : 'Invalid review data';
+			} else if (error.message.includes('500')) {
+				errorMessage = $languageStore === 'ar' ? 'خطأ في الخادم' : 'Server error';
+			}
+			
+			alert(errorMessage);
+			// Don't close modal on error so user can try again
+		}
 	}
 	
 	function selectCategory(category) {
@@ -200,14 +288,14 @@
 					>
 						{t('allCategories')}
 					</button>
-					{#each categories as category}
-						<button 
-							class="category-btn {selectedCategory?.id === category.id ? 'active' : ''}"
-							on:click={() => selectCategory(category)}
-						>
-							{category.name}
-						</button>
-					{/each}
+{#each categories as category}
+<button 
+class="category-btn {selectedCategory?.id === category.id ? 'active' : ''}"
+on:click={() => selectCategory(category)}
+>
+{getLocalizedName(category)}
+</button>
+{/each}
 				</div>
 			</div>
 
@@ -232,14 +320,20 @@
 					{#each filteredProducts as product}
 						<div class="product-card" on:click={() => openProductModal(product)}>
 							<div class="product-image">
-								<img src={product.image} alt={product.name} />
+								<img src={product.imageUrl} alt={getLocalizedName(product)} />
 								<div class="product-overlay">
 									<button class="view-btn">{t('viewProduct')}</button>
 								</div>
 							</div>
 							<div class="product-info">
-								<h3 class="product-name">{product.name}</h3>
-								<p class="product-category">{product.category}</p>
+								<h3 class="product-name">{getLocalizedName(product)}</h3>
+								<p class="product-category">{getLocalizedName(product.category) || 'No Category'}</p>
+								{#if product.ratingsAverage}
+									<div class="product-rating">
+										<span class="rating-stars">{'★'.repeat(Math.round(product.ratingsAverage))}</span>
+										<span class="rating-text">({product.ratingsQuantity || 0})</span>
+									</div>
+								{/if}
 							</div>
 						</div>
 					{/each}
@@ -260,12 +354,20 @@
 			
 			<div class="modal-body">
 				<div class="product-detail-image">
-					<img src={selectedProduct.image} alt={selectedProduct.name} />
+					<img src={selectedProduct.imageUrl} alt={getLocalizedName(selectedProduct)} />
 				</div>
 				
 				<div class="product-details">
-					<h4>{selectedProduct.name}</h4>
-					<p class="product-description">{selectedProduct.description}</p>
+					<h4>{getLocalizedName(selectedProduct)}</h4>
+					<p class="product-description">{getLocalizedName({name: selectedProduct.description})}</p>
+					
+					{#if selectedProduct.ratingsAverage}
+						<div class="product-rating-detail">
+							<span class="rating-stars">{'★'.repeat(Math.round(selectedProduct.ratingsAverage))}</span>
+							<span class="rating-average">{selectedProduct.ratingsAverage.toFixed(1)}</span>
+							<span class="rating-count">({selectedProduct.ratingsQuantity || 0} {t('reviews')})</span>
+						</div>
+					{/if}
 					
 					<div class="product-specs">
 						<div class="spec-item">
@@ -278,18 +380,34 @@
 						</div>
 						<div class="spec-item">
 							<label>{t('type')}:</label>
-							<span>{selectedProduct.category}</span>
+							<span>{getLocalizedName(selectedProduct.category) || 'No Category'}</span>
 						</div>
 					</div>
 					
-					<button class="order-btn" on:click={() => handleProductOrder(selectedProduct)}>
-						{t('orderNow')}
-					</button>
+					<div class="product-actions">
+						<button class="order-btn" on:click={() => handleProductOrder(selectedProduct)}>
+							{t('orderNow')}
+						</button>
+						<button class="review-btn" on:click={openReviewModal}>
+							{currentLang === 'ar' ? 'إضافة مراجعة' : 'Add Review'}
+						</button>
+					</div>
+
+					<!-- Reviews Section -->
+					<ReviewsList reviews={productReviews} isLoading={reviewsLoading} />
 				</div>
 			</div>
 		</div>
 	</div>
 {/if}
+
+<!-- Review Modal -->
+<ReviewModal 
+	show={showReviewModal} 
+	productId={selectedProduct?.id || ''} 
+	on:submit={handleReviewSubmit}
+	on:close={closeReviewModal}
+/>
 
 <style>
 	.homepage {
@@ -561,6 +679,42 @@
 	.product-category {
 		color: var(--text-secondary, #64748b);
 		font-size: 0.875rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.product-rating {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.875rem;
+	}
+
+	.rating-stars {
+		color: #fbbf24;
+	}
+
+	.rating-text {
+		color: var(--text-secondary, #64748b);
+	}
+
+	.product-rating-detail {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+		padding: 0.75rem;
+		background: var(--bg-secondary, #f8fafc);
+		border-radius: 8px;
+	}
+
+	.rating-average {
+		font-weight: 600;
+		color: var(--text-primary, #1e293b);
+	}
+
+	.rating-count {
+		color: var(--text-secondary, #64748b);
+		font-size: 0.875rem;
 	}
 
 	/* Loading */
@@ -689,21 +843,43 @@
 		color: var(--text-secondary, #64748b);
 	}
 
-	.order-btn {
-		width: 100%;
-		background: linear-gradient(135deg, #3b82f6, #2563eb);
-		color: white;
+	.product-actions {
+		display: flex;
+		gap: 12px;
+		margin-bottom: 2rem;
+	}
+
+	.order-btn,
+	.review-btn {
+		flex: 1;
 		border: none;
 		padding: 0.75rem 1.5rem;
 		border-radius: 8px;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.3s ease;
+		font-size: 0.9rem;
+	}
+
+	.order-btn {
+		background: linear-gradient(135deg, #3b82f6, #2563eb);
+		color: white;
 	}
 
 	.order-btn:hover {
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+	}
+
+	.review-btn {
+		background: var(--review-btn-bg, #f8f9fa);
+		color: var(--review-btn-color, #495057);
+		border: 1px solid var(--border-color, #dee2e6);
+	}
+
+	.review-btn:hover {
+		background: var(--review-btn-hover, #e9ecef);
+		transform: translateY(-1px);
 	}
 
 	/* Dark mode styles */
@@ -713,6 +889,9 @@
 		--text-primary: #f1f5f9;
 		--text-secondary: #94a3b8;
 		--border-color: #334155;
+		--review-btn-bg: #374151;
+		--review-btn-color: #d1d5db;
+		--review-btn-hover: #4b5563;
 	}
 
 	/* RTL support */
@@ -753,6 +932,15 @@
 
 		.product-detail-image img {
 			height: 200px;
+		}
+
+		.product-actions {
+			flex-direction: column;
+		}
+
+		.order-btn,
+		.review-btn {
+			width: 100%;
 		}
 	}
 </style>
