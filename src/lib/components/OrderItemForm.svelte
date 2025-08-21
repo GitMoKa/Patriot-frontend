@@ -11,7 +11,7 @@
 	const dispatch = createEventDispatcher();
 
 	// Modal states
-	let currentStep = 1; // 1 = category/product selection, 2 = custom item details
+	let currentStep = 1; // 1 = category/product selection, 2 = product dimensions, 3 = custom item details
 	
 	// Data arrays
 	let categories = [];
@@ -22,6 +22,12 @@
 	// Form data
 	let selectedCategory = null;
 	let selectedProduct = null;
+	let productDimensions = {
+		width: 1,
+		height: 1
+	};
+	let productAdditionalStages = []; // For special product stage selection
+	let itemNote = ''; // Optional note for the order item
 	let customItem = {
 		width: 1,
 		height: 1,
@@ -119,16 +125,56 @@
 		customItem[field] = numValue;
 	}
 
+	// Validate and constrain product dimensions
+	function validateProductDimension(value, field) {
+		let numValue = parseInt(value);
+		if (isNaN(numValue) || numValue < 1) {
+			numValue = 1;
+		} else if (numValue > 250) {
+			numValue = 250;
+		}
+		productDimensions[field] = numValue;
+	}
+
+	// Initialize product dimensions when a product is selected
+	$: if (selectedProduct) {
+		productDimensions.width = selectedProduct.width || 1;
+		productDimensions.height = selectedProduct.height || 1;
+		// Reset additional stages when product changes
+		productAdditionalStages = [];
+	}
+
+	// Check if current product is the special product that needs stage selection
+	$: isSpecialProduct = selectedProduct?.id === "65f5d608-ccf0-4db4-b114-6707a6ba9049";
+
+	// Get available stages for the special product (exclude stages the product already has)
+	$: availableStagesForProduct = isSpecialProduct 
+		? stages.filter(stage => {
+			// If product has no stages array or it's empty, all stages are available
+			if (!selectedProduct?.stages || !Array.isArray(selectedProduct.stages) || selectedProduct.stages.length === 0) {
+				return true;
+			}
+			// Otherwise, exclude stages that the product already has
+			return !selectedProduct.stages.some(productStage => productStage.id === stage.id);
+		})
+		: [];
+
 	function handleNextStep() {
 		if (!selectedProduct) {
 			error = 'Please select a product.';
 			return;
 		}
 
-		// Add product directly to order
+		// Go to product dimensions step
+		currentStep = 2;
+		error = '';
+	}
+
+	function handleConfirmProduct() {
+		// Add product with modified dimensions to order
 		const productItem = {
-			width: selectedProduct.width,
-			height: selectedProduct.height,
+			width: productDimensions.width,
+			height: productDimensions.height,
 			productId: selectedProduct.id,
 			categoryId: selectedCategory === 'no-category' ? undefined : selectedCategory?.id,
 			category: selectedCategory === 'no-category' ? undefined : selectedCategory,
@@ -137,14 +183,30 @@
 			type: 'product'
 		};
 
+		// Add note if provided
+		if (itemNote.trim()) {
+			productItem.note = itemNote.trim();
+		}
+
+		// Add additional stages for special product
+		if (isSpecialProduct && productAdditionalStages.length > 0) {
+			productItem.stageIds = productAdditionalStages.map(stage => stage.id);
+			productItem.stages = productAdditionalStages;
+		}
+
 		dispatch('addItem', productItem);
 		closeModal();
 	}
 
-	function handleSkip() {
-		currentStep = 2;
-		error = '';
+	function toggleProductStage(stage) {
+		const index = productAdditionalStages.findIndex(s => s.id === stage.id);
+		if (index > -1) {
+			productAdditionalStages = productAdditionalStages.filter(s => s.id !== stage.id);
+		} else {
+			productAdditionalStages = [...productAdditionalStages, stage];
+		}
 	}
+
 
 	function handleConfirmCustomItem() {
 		// Validation - only stages are required
@@ -166,6 +228,11 @@
 			type: 'custom'
 		};
 
+		// Add note if provided
+		if (itemNote.trim()) {
+			newCustomItem.note = itemNote.trim();
+		}
+
 		dispatch('addItem', newCustomItem);
 		closeModal();
 	}
@@ -179,6 +246,12 @@
 		selectedCategory = null;
 		selectedProduct = null;
 		products = [];
+		productDimensions = {
+			width: 1,
+			height: 1
+		};
+		productAdditionalStages = [];
+		itemNote = '';
 		customItem = {
 			width: 1,
 			height: 1,
@@ -206,6 +279,8 @@
 			<h2>
 				{#if currentStep === 1}
 					Add Item - Select Product
+				{:else if currentStep === 2}
+					Add Item - Product Dimensions
 				{:else}
 					Add Item - Custom Details
 				{/if}
@@ -246,13 +321,96 @@
 
 					<div class="modal-actions">
 						<button type="button" class="cancel-button" on:click={closeModal}>Cancel</button>
-						<button type="button" class="skip-button" on:click={handleSkip}>Skip</button>
 						<button type="button" class="next-button" on:click={handleNextStep} disabled={!selectedProduct}>Next Step</button>
 					</div>
 				</div>
 
 			{:else if currentStep === 2}
-				<!-- Step 2: Custom Item Details -->
+				<!-- Step 2: Product Dimensions -->
+				<div class="step-content">
+					{#if selectedProduct}
+						<div class="product-info">
+							<h3>Selected Product: {getLocalizedName(selectedProduct)}</h3>
+							<p>Original dimensions: {selectedProduct.width || 1} × {selectedProduct.height || 1}</p>
+						</div>
+					{/if}
+
+					<div class="dimensions-row">
+						<div class="form-group">
+							<label for="product-width">Width *</label>
+							<input 
+								type="number" 
+								id="product-width" 
+								bind:value={productDimensions.width}
+								on:input={(e) => validateProductDimension(e.target.value, 'width')}
+								min="1" 
+								max="250" 
+								required
+							>
+						</div>
+						<div class="form-group">
+							<label for="product-height">Height *</label>
+							<input 
+								type="number" 
+								id="product-height" 
+								bind:value={productDimensions.height}
+								on:input={(e) => validateProductDimension(e.target.value, 'height')}
+								min="1" 
+								max="250" 
+								required
+							>
+						</div>
+					</div>
+
+					{#if isSpecialProduct}
+						<div class="form-group">
+							<label>Additional Stages (Optional)</label>
+							<p class="stage-info-text">Select additional stages for this product. Default stages cannot be removed.</p>
+							{#if availableStagesForProduct.length > 0}
+								<div class="stages-container">
+									{#each availableStagesForProduct as stage}
+										<div class="stage-item">
+											<label class="stage-label">
+												<input 
+													type="checkbox" 
+													checked={productAdditionalStages.some(s => s.id === stage.id)}
+													on:change={() => toggleProductStage(stage)}
+												>
+												<div class="stage-info">
+													<span class="stage-name">{getLocalizedName(stage)}</span>
+													{#if stage.description}
+														<span class="stage-description">{getLocalizedName({name: stage.description})}</span>
+													{/if}
+												</div>
+											</label>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<p class="no-stages-text">No additional stages available for this product.</p>
+							{/if}
+						</div>
+					{/if}
+
+					<div class="form-group">
+						<label for="item-note">Note (Optional)</label>
+						<textarea 
+							id="item-note" 
+							bind:value={itemNote}
+							placeholder="Add any additional notes for this item..."
+							rows="3"
+						></textarea>
+					</div>
+
+					<div class="modal-actions">
+						<button type="button" class="cancel-button" on:click={closeModal}>Cancel</button>
+						<button type="button" class="back-button" on:click={() => currentStep = 1}>Back</button>
+						<button type="button" class="confirm-button" on:click={handleConfirmProduct}>Add to Order</button>
+					</div>
+				</div>
+
+			{:else if currentStep === 3}
+				<!-- Step 3: Custom Item Details -->
 				<div class="step-content">
 					<div class="dimensions-row">
 						<div class="form-group">
@@ -312,6 +470,16 @@
 								</div>
 							{/each}
 						</div>
+					</div>
+
+					<div class="form-group">
+						<label for="custom-item-note">Note (Optional)</label>
+						<textarea 
+							id="custom-item-note" 
+							bind:value={itemNote}
+							placeholder="Add any additional notes for this item..."
+							rows="3"
+						></textarea>
 					</div>
 
 					<div class="modal-actions">
@@ -501,10 +669,31 @@
 		margin-top: 1.5rem;
 	}
 
+	.product-info {
+		background: var(--bg-secondary);
+		padding: 1rem;
+		border-radius: 8px;
+		margin-bottom: 1.5rem;
+		border: 1px solid var(--border-color);
+	}
+
+	.product-info h3 {
+		margin: 0 0 0.5rem 0;
+		color: var(--text-primary);
+		font-size: 1.1rem;
+	}
+
+	.product-info p {
+		margin: 0;
+		color: var(--text-secondary);
+		font-size: 0.9rem;
+	}
+
 	.cancel-button,
 	.next-button,
 	.skip-button,
-	.confirm-button {
+	.confirm-button,
+	.back-button {
 		padding: 0.75rem 1.5rem;
 		border-radius: 8px;
 		font-weight: 600;
@@ -593,5 +782,60 @@
 		.stages-container {
 			max-height: 150px;
 		}
+
+		.back-button {
+			width: 100%;
+			justify-content: center;
+		}
+	}
+
+	.back-button {
+		background: var(--bg-secondary);
+		color: var(--text-primary);
+		border: 1px solid var(--border-color);
+	}
+
+	.back-button:hover {
+		background: var(--bg-tertiary);
+		border-color: var(--border-hover);
+	}
+
+	.stage-info-text {
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+		margin: 0.5rem 0 1rem 0;
+		font-style: italic;
+	}
+
+	.no-stages-text {
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+		margin: 0.5rem 0;
+		text-align: center;
+		font-style: italic;
+	}
+
+	textarea {
+		width: 100%;
+		padding: 0.75rem;
+		border: 2px solid var(--border-color);
+		border-radius: 8px;
+		font-size: 1rem;
+		font-family: inherit;
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		transition: border-color 0.3s ease;
+		resize: vertical;
+		min-height: 80px;
+	}
+
+	textarea:focus {
+		outline: none;
+		border-color: var(--primary-color);
+	}
+
+	textarea::placeholder {
+		color: var(--text-secondary);
+		opacity: 0.7;
 	}
 </style>

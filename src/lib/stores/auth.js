@@ -112,6 +112,28 @@ function createAuthStore() {
 			}));
 		},
 
+		// Refresh user data from server
+		refreshUser: async () => {
+			try {
+				update(state => ({ ...state, isLoading: true }));
+				const user = await authService.getMe();
+				update(state => ({
+					...state,
+					user,
+					isLoading: false,
+					error: null
+				}));
+				return user;
+			} catch (error) {
+				update(state => ({
+					...state,
+					isLoading: false,
+					error: error.message
+				}));
+				throw error;
+			}
+		},
+
 		// Clear error
 		clearError: () => {
 			update(state => ({ ...state, error: null }));

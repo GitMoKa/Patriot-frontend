@@ -6,16 +6,28 @@ export class CategoriesService {
 		try {
 			const response = await apiService.get('/categories');
 			
-			// Handle API response structure similar to products
-			if (response.result && Array.isArray(response.result)) {
+			// Handle the new API response structure with results array
+			if (response.results && Array.isArray(response.results)) {
 				return {
 					results: response.results,
-					categories: response.result
+					total: response.total || response.results.length
+				};
+			}
+			
+			// Handle direct response or wrapped response
+			const data = response.data || response;
+			if (data.results && Array.isArray(data.results)) {
+				return {
+					results: data.results,
+					total: data.total || data.results.length
 				};
 			}
 			
 			// Fallback for different response structures
-			return Array.isArray(response) ? response : [];
+			return {
+				results: Array.isArray(data) ? data : [],
+				total: Array.isArray(data) ? data.length : 0
+			};
 		} catch (error) {
 			throw new Error('Failed to fetch categories: ' + error.message);
 		}

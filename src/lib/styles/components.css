@@ -19,9 +19,6 @@
 	background: var(--bg-primary);
 	border-bottom: 1px solid var(--border-color);
 	padding: var(--spacing-lg) var(--spacing-xl);
-	position: sticky;
-	top: 0;
-	z-index: var(--z-sticky);
 	backdrop-filter: blur(10px);
 }
 

@@ -66,11 +66,11 @@
 						</div>
 					</div>
 					
-					{#if review.title}
+					{#if review.title && review.title.trim()}
 						<h5 class="review-title">{review.title}</h5>
 					{/if}
 					
-					{#if review.comment}
+					{#if review.comment && review.comment.trim()}
 						<p class="review-comment">{review.comment}</p>
 					{/if}
 				</div>

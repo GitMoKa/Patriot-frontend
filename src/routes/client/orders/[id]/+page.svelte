@@ -39,24 +39,21 @@
 		}
 	}
 	
-	// Simulate API call to get order items
+	// Load order items from API
 	async function loadOrderItems() {
 		try {
-			// Simulate API call to GET /orders/:id/items
-			await new Promise(resolve => setTimeout(resolve, 500));
+			// Import the orders service
+			const { ordersService } = await import('$lib/services/orders.js');
 			
-			orderItems = [
-				{
-					id: '1',
-					productName: 'Product A',
-					quantity: 2,
-					price: 149.99,
-					subtotal: 299.98
-				}
-			];
+			// Get order items from API
+			const response = await ordersService.getOrderItems(orderId);
+			
+			// Handle the response structure - it should be an array of items
+			orderItems = Array.isArray(response) ? response : (response.items || response.results || []);
 			
 		} catch (error) {
 			console.error('Failed to load order items:', error);
+			orderItems = [];
 		}
 	}
 	
@@ -288,28 +285,41 @@
 				
 				<div class="order-section">
 					<h3>Order Items</h3>
-					<div class="items-table">
-						<div class="table-header">
-							<span>Product</span>
-							<span>Quantity</span>
-							<span>Price</span>
-							<span>Subtotal</span>
-						</div>
-						{#each orderItems as item}
-							<div class="table-row">
-								<span>{item.productName}</span>
-								<span>{item.quantity}</span>
-								<span>{formatCurrency(item.price)}</span>
-								<span>{formatCurrency(item.subtotal)}</span>
+					{#if orderItems.length > 0}
+						<div class="items-table">
+							<div class="table-header">
+								<span>Item ID</span>
+								<span>Dimensions</span>
+								<span>Status</span>
+								<span>Price</span>
+								<span>Created</span>
 							</div>
-						{/each}
-						<div class="table-footer">
-							<span></span>
-							<span></span>
-							<span><strong>Total:</strong></span>
-							<span><strong>{formatCurrency(order.totalAmount)}</strong></span>
+							{#each orderItems as item}
+								<div class="table-row">
+									<span>#{item.id.slice(0, 8)}...</span>
+									<span>{item.width} × {item.height}</span>
+									<span class="status-badge" style="background-color: {getStatusColor(item.status)}20; color: {getStatusColor(item.status)}">
+										{item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+									</span>
+									<span>{formatCurrency(item.price)}</span>
+									<span>{formatDate(item.createdAt)}</span>
+								</div>
+							{/each}
+							{#if order.totalAmount}
+								<div class="table-footer">
+									<span></span>
+									<span></span>
+									<span></span>
+									<span><strong>Total:</strong></span>
+									<span><strong>{formatCurrency(order.totalAmount)}</strong></span>
+								</div>
+							{/if}
 						</div>
-					</div>
+					{:else}
+						<div class="empty-items">
+							<p>No items found for this order.</p>
+						</div>
+					{/if}
 				</div>
 				
 				{#if isEditing}
@@ -848,6 +858,20 @@
 	.priority-high {
 		background-color: #fee2e2;
 		color: #dc2626;
+	}
+
+	.empty-items {
+		text-align: center;
+		padding: 2rem;
+		background: var(--bg-secondary);
+		border-radius: 8px;
+		border: 1px solid var(--border-color);
+	}
+
+	.empty-items p {
+		color: var(--text-secondary);
+		margin: 0;
+		font-style: italic;
 	}
 </style>
 

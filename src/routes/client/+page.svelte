@@ -4,112 +4,16 @@
 	import { authStore } from '$lib/stores/auth.js';
 	import { languageStore, t } from '$lib/stores/language.js';
 	import { themeStore } from '$lib/stores/theme.js';
-	import { productsService } from '$lib/services/products.js';
-	import { categoriesService } from '$lib/services/categories.js';
-	import { reviewsService } from '$lib/services/reviews.js';
-	import ReviewModal from '$lib/components/ReviewModal.svelte';
-	import ReviewsList from '$lib/components/ReviewsList.svelte';
-	
-	let products = [];
-	let categories = [];
-	let filteredProducts = [];
-	let selectedCategory = null;
-	let isLoading = false;
-	let searchQuery = '';
-	let showProductModal = false;
-	let selectedProduct = null;
-	let showReviewModal = false;
-	let productReviews = [];
-	let reviewsLoading = false;
+	// Simplified home page - no product/review functionality needed
 	
 	// Reactive statements
 	$: isAuthenticated = $authStore.isAuthenticated;
 	$: currentLang = $languageStore;
 	$: currentTheme = $themeStore;
 	
-	// Helper function to get localized name
-	function getLocalizedName(item) {
-		if (!item || !item.name) return '';
-		if (typeof item.name === 'string') return item.name;
-		
-		// Use current language preference, fallback to English, then Arabic
-		return item.name[currentLang] || item.name.en || item.name.ar || '';
-	}
-
-	// Filter products based on category and search
-	$: {
-		let filtered = products;
-		
-		// Filter by category
-		if (selectedCategory) {
-			filtered = filtered.filter(product => {
-				// Handle both string and object category formats
-				const productCategory = typeof product.category === 'string' 
-					? product.category 
-					: getLocalizedName(product.category);
-				
-				const selectedCategoryName = getLocalizedName(selectedCategory);
-				return productCategory === selectedCategoryName;
-			});
-		}
-		
-		// Filter by search query
-		if (searchQuery.trim()) {
-			const query = searchQuery.toLowerCase();
-			filtered = filtered.filter(product => {
-				const name = getLocalizedName(product);
-				const description = getLocalizedName({name: product.description});
-				return name.toLowerCase().includes(query) || description.toLowerCase().includes(query);
-			});
-		}
-		
-		// Sort by localized name
-		filtered.sort((a, b) => {
-			const nameA = getLocalizedName(a);
-			const nameB = getLocalizedName(b);
-			return nameA.localeCompare(nameB);
-		});
-		
-		filteredProducts = filtered;
-	}
+	// Simplified home page with basic navigation functions
 	
-	onMount(async () => {
-		await loadData();
-	});
-	
-	async function loadData() {
-		isLoading = true;
-		try {
-			// Load products and categories in parallel
-			const [productsResponse, categoriesResponse] = await Promise.all([
-				loadProducts(),
-				loadCategories()
-			]);
-		} catch (error) {
-			console.error('Failed to load data:', error);
-		} finally {
-			isLoading = false;
-		}
-	}
-	
-	async function loadProducts() {
-		try {
-			const response = await productsService.getAllProducts();
-			products = response.products || response.results || [];
-			console.log(`Loaded ${response.total || products.length} products from API`);
-		} catch (error) {
-			console.error('Failed to load products:', error);
-		}
-	}
-	
-	async function loadCategories() {
-		try {
-			const response = await categoriesService.getAllCategories();
-			categories = response.results || response.categories || response;
-		} catch (error) {
-			console.error('Failed to load categories:', error);
-		}
-	}
+	// No need to load data on mount for the simplified home page
 	
 	function handleCreateOrder() {
 		if (!isAuthenticated) {
@@ -119,88 +23,11 @@
 		goto('/client/orders/create');
 	}
 	
-	function handleProductOrder(product) {
-		if (!isAuthenticated) {
-			goto('/login');
-			return;
-		}
-		// Navigate to order creation with pre-selected product
-		goto(`/client/orders/create?productId=${product.id}`);
-	}
-	
-	async function openProductModal(product) {
-		selectedProduct = product;
-		showProductModal = true;
-		await loadProductReviews(product.id);
-	}
-	
-	function closeProductModal() {
-		selectedProduct = null;
-		showProductModal = false;
-		productReviews = [];
+	function handleBrowseProducts() {
+		goto('/client/products');
 	}
 
-	async function loadProductReviews(productId) {
-		if (!productId) return;
-		
-		reviewsLoading = true;
-		try {
-			const response = await reviewsService.getProductReviews(productId);
-			// Response is directly an array of review objects
-			productReviews = Array.isArray(response) ? response : [];
-		} catch (error) {
-			console.error('Failed to load product reviews:', error);
-			productReviews = [];
-		} finally {
-			reviewsLoading = false;
-		}
-	}
-
-	function openReviewModal() {
-		if (!isAuthenticated) {
-			goto('/login');
-			return;
-		}
-		showReviewModal = true;
-	}
-
-	function closeReviewModal() {
-		showReviewModal = false;
-	}
-
-	async function handleReviewSubmit(event) {
-		try {
-			console.log('Submitting review data:', event.detail);
-			const response = await reviewsService.createReview(event.detail);
-			console.log('Review submission response:', response);
-			closeReviewModal();
-			// Reload reviews to show the new one
-			await loadProductReviews(selectedProduct.id);
-			alert($languageStore === 'ar' ? 'تم إرسال المراجعة بنجاح!' : 'Review submitted successfully!');
-		} catch (error) {
-			console.error('Failed to submit review - Full error:', error);
-			console.error('Error message:', error.message);
-			console.error('Error status:', error.response?.status);
-			console.error('Error response:', error.response);
-			
-			// Show more specific error message based on status
-			let errorMessage = $languageStore === 'ar' ? 'فشل في إرسال المراجعة' : 'Failed to submit review';
-			if (error.message.includes('401')) {
-				errorMessage = $languageStore === 'ar' ? 'يجب تسجيل الدخول أولاً' : 'Please login first';
-			} else if (error.message.includes('400')) {
-				errorMessage = $languageStore === 'ar' ? 'بيانات المراجعة غير صحيحة' : 'Invalid review data';
-			} else if (error.message.includes('500')) {
-				errorMessage = $languageStore === 'ar' ? 'خطأ في الخادم' : 'Server error';
-			}
-			
-			alert(errorMessage);
-			// Don't close modal on error so user can try again
-		}
-	}
-	
-	function selectCategory(category) {
-		selectedCategory = selectedCategory?.id === category?.id ? null : category;
-	}
+	// Simplified home page - review functionality moved to products page
 </script>
 
 <svelte:head>
@@ -224,9 +51,18 @@
 						Leading glass manufacturing excellence for decades, providing innovative glass solutions for all your needs
 					{/if}
 				</p>
-				<button class="cta-button" on:click={handleCreateOrder}>
-					{t('createOrder')}
-				</button>
+				<div class="hero-actions">
+					<button class="cta-button primary" on:click={handleCreateOrder}>
+						{t('createOrder')}
+					</button>
+					<button class="cta-button primary" on:click={handleBrowseProducts}>
+						{#if currentLang === 'ar'}
+							تصفح المنتجات
+						{:else}
+							Browse Products
+						{/if}
+					</button>
+				</div>
 			</div>
 		</div>
 	</section>
@@ -265,149 +101,85 @@
 		</div>
 	</section>
 
-	<!-- Products Section -->
-	<section class="products">
+	<!-- Features Section -->
+	<section class="features">
 		<div class="container">
-			<h2>{t('ourProducts')}</h2>
-			
-			<!-- Search and Filter -->
-			<div class="products-controls">
-				<div class="search-box">
-					<input 
-						type="text" 
-						bind:value={searchQuery}
-						placeholder={t('search')}
-						class="search-input"
-					/>
-				</div>
-				
-				<div class="category-filters">
-					<button 
-						class="category-btn {selectedCategory === null ? 'active' : ''}"
-						on:click={() => selectCategory(null)}
-					>
-						{t('allCategories')}
-					</button>
-{#each categories as category}
-<button 
-class="category-btn {selectedCategory?.id === category.id ? 'active' : ''}"
-on:click={() => selectCategory(category)}
->
-{getLocalizedName(category)}
-</button>
-{/each}
-				</div>
-			</div>
-
-			<!-- Products Grid -->
-			{#if isLoading}
-				<div class="loading">
-					<div class="spinner"></div>
-					<p>{t('loading')}</p>
-				</div>
-			{:else if filteredProducts.length === 0}
-				<div class="no-products">
+			<h2>
+				{#if currentLang === 'ar'}
+					لماذا تختار باتريوت؟
+				{:else}
+					Why Choose Patriot?
+				{/if}
+			</h2>
+			<div class="features-grid">
+				<div class="feature-card">
+					<div class="feature-icon">🏭</div>
+					<h3>
+						{#if currentLang === 'ar'}
+							جودة عالية
+						{:else}
+							High Quality
+						{/if}
+					</h3>
 					<p>
 						{#if currentLang === 'ar'}
-							لا توجد منتجات متاحة
+							نستخدم أحدث التقنيات لضمان أعلى معايير الجودة في منتجاتنا
 						{:else}
-							No products available
+							We use the latest technology to ensure the highest quality standards in our products
 						{/if}
 					</p>
 				</div>
-			{:else}
-				<div class="products-grid">
-					{#each filteredProducts as product}
-						<div class="product-card" on:click={() => openProductModal(product)}>
-							<div class="product-image">
-								<img src={product.imageUrl} alt={getLocalizedName(product)} />
-								<div class="product-overlay">
-									<button class="view-btn">{t('viewProduct')}</button>
-								</div>
-							</div>
-							<div class="product-info">
-								<h3 class="product-name">{getLocalizedName(product)}</h3>
-								<p class="product-category">{getLocalizedName(product.category) || 'No Category'}</p>
-								{#if product.ratingsAverage}
-									<div class="product-rating">
-										<span class="rating-stars">{'★'.repeat(Math.round(product.ratingsAverage))}</span>
-										<span class="rating-text">({product.ratingsQuantity || 0})</span>
-									</div>
-								{/if}
-							</div>
-						</div>
-					{/each}
+				
+				<div class="feature-card">
+					<div class="feature-icon">⚡</div>
+					<h3>
+						{#if currentLang === 'ar'}
+							تسليم سريع
+						{:else}
+							Fast Delivery
+						{/if}
+					</h3>
+					<p>
+						{#if currentLang === 'ar'}
+							نلتزم بمواعيد التسليم ونضمن وصول منتجاتكم في الوقت المحدد
+						{:else}
+							We commit to delivery schedules and ensure your products arrive on time
+						{/if}
+					</p>
 				</div>
-			{/if}
+				
+				<div class="feature-card">
+					<div class="feature-icon">🎯</div>
+					<h3>
+						{#if currentLang === 'ar'}
+							حلول مخصصة
+						{:else}
+							Custom Solutions
+						{/if}
+					</h3>
+					<p>
+						{#if currentLang === 'ar'}
+							نقدم حلول زجاجية مخصصة تناسب احتياجاتكم الخاصة
+						{:else}
+							We provide custom glass solutions tailored to your specific needs
+						{/if}
+					</p>
+				</div>
+			</div>
+			
+			<div class="features-cta">
+				<button class="cta-button primary" on:click={handleBrowseProducts}>
+					{#if currentLang === 'ar'}
+						استكشف منتجاتنا
+					{:else}
+						Explore Our Products
+					{/if}
+				</button>
+			</div>
 		</div>
 	</section>
 </div>
 
-<!-- Product Modal -->
-{#if showProductModal && selectedProduct}
-	<div class="modal-overlay" on:click={closeProductModal}>
-		<div class="modal-content" on:click|stopPropagation>
-			<div class="modal-header">
-				<h3>{t('productDetails')}</h3>
-				<button class="close-btn" on:click={closeProductModal}>×</button>
-			</div>
-			
-			<div class="modal-body">
-				<div class="product-detail-image">
-					<img src={selectedProduct.imageUrl} alt={getLocalizedName(selectedProduct)} />
-				</div>
-				
-				<div class="product-details">
-					<h4>{getLocalizedName(selectedProduct)}</h4>
-					<p class="product-description">{getLocalizedName({name: selectedProduct.description})}</p>
-					
-					{#if selectedProduct.ratingsAverage}
-						<div class="product-rating-detail">
-							<span class="rating-stars">{'★'.repeat(Math.round(selectedProduct.ratingsAverage))}</span>
-							<span class="rating-average">{selectedProduct.ratingsAverage.toFixed(1)}</span>
-							<span class="rating-count">({selectedProduct.ratingsQuantity || 0} {t('reviews')})</span>
-						</div>
-					{/if}
-					
-					<div class="product-specs">
-						<div class="spec-item">
-							<label>{t('width')}:</label>
-							<span>{selectedProduct.width} cm</span>
-						</div>
-						<div class="spec-item">
-							<label>{t('height')}:</label>
-							<span>{selectedProduct.height} cm</span>
-						</div>
-						<div class="spec-item">
-							<label>{t('type')}:</label>
-							<span>{getLocalizedName(selectedProduct.category) || 'No Category'}</span>
-						</div>
-					</div>
-					
-					<div class="product-actions">
-						<button class="order-btn" on:click={() => handleProductOrder(selectedProduct)}>
-							{t('orderNow')}
-						</button>
-						<button class="review-btn" on:click={openReviewModal}>
-							{currentLang === 'ar' ? 'إضافة مراجعة' : 'Add Review'}
-						</button>
-					</div>
-
-					<!-- Reviews Section -->
-					<ReviewsList reviews={productReviews} isLoading={reviewsLoading} />
-				</div>
-			</div>
-		</div>
-	</div>
-{/if}
-
-<!-- Review Modal -->
-<ReviewModal 
-	show={showReviewModal} 
-	productId={selectedProduct?.id || ''} 
-	on:submit={handleReviewSubmit}
-	on:close={closeReviewModal}
-/>
 
 <style>
 	.homepage {
@@ -471,9 +243,14 @@ on:click={() => selectCategory(category)}
 		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
 	}
 
+	.hero-actions {
+		display: flex;
+		gap: 1rem;
+		justify-content: center;
+		flex-wrap: wrap;
+	}
+
 	.cta-button {
-		background: linear-gradient(135deg, #f59e0b, #d97706);
-		color: white;
 		border: none;
 		padding: 1rem 2rem;
 		font-size: 1.125rem;
@@ -481,12 +258,35 @@ on:click={() => selectCategory(category)}
 		border-radius: 50px;
 		cursor: pointer;
 		transition: all 0.3s ease;
+		text-decoration: none;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.cta-button.primary {
+		background: linear-gradient(135deg, #f59e0b, #d97706);
+		color: white;
 		box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
 	}
 
-	.cta-button:hover {
+	.cta-button.primary:hover {
 		transform: translateY(-2px);
 		box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6);
+	}
+
+	.cta-button.secondary {
+		background: transparent;
+		color: white;
+		border: 2px solid white;
+		box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
+	}
+
+	.cta-button.secondary:hover {
+		background: white;
+		color: #1e293b;
+		transform: translateY(-2px);
+		box-shadow: 0 6px 20px rgba(255, 255, 255, 0.4);
 	}
 
 	/* Container */
@@ -942,6 +742,66 @@ on:click={() => selectCategory(category)}
 		.review-btn {
 			width: 100%;
 		}
+	}
+
+	/* Features Section */
+	.features {
+		padding: 4rem 0;
+		background: var(--bg-secondary, #f8fafc);
+	}
+
+	.features h2 {
+		text-align: center;
+		margin-bottom: 3rem;
+		font-size: 2.5rem;
+		font-weight: 700;
+		color: var(--text-primary, #1e293b);
+	}
+
+	.features-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+		gap: 2rem;
+		margin-bottom: 3rem;
+	}
+
+	.feature-card {
+		background: var(--bg-primary, white);
+		padding: 2rem;
+		border-radius: 16px;
+		text-align: center;
+		box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+		transition: all 0.3s ease;
+		border: 1px solid var(--border-color, #e2e8f0);
+	}
+
+	.feature-card:hover {
+		transform: translateY(-4px);
+		box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+	}
+
+	.feature-icon {
+		font-size: 3rem;
+		margin-bottom: 1rem;
+		display: block;
+	}
+
+	.feature-card h3 {
+		font-size: 1.5rem;
+		font-weight: 600;
+		color: var(--text-primary, #1e293b);
+		margin: 0 0 1rem 0;
+	}
+
+	.feature-card p {
+		color: var(--text-secondary, #64748b);
+		line-height: 1.6;
+		margin: 0;
+	}
+
+	.features-cta {
+		text-align: center;
+		margin-top: 2rem;
 	}
 </style>
 

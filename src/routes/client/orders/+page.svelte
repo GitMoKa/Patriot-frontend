@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { ordersService } from '$lib/services/orders.js';
 	
 	let orders = [];
@@ -9,6 +10,11 @@
 	let currentPage = 1;
 	let totalPages = 1;
 	let itemsPerPage = 10;
+	
+	// Get status filter from URL parameters
+	$: if ($page.url.searchParams.has('status')) {
+		statusFilter = $page.url.searchParams.get('status') || 'all';
+	}
 	
 	async function loadOrders() {
 		isLoading = true;
@@ -110,9 +116,11 @@
 		<select bind:value={statusFilter} class="status-filter">
 			<option value="all">All Status</option>
 			<option value="pending">Pending</option>
-			<option value="shipped">Shipped</option>
+			<option value="in-progress">In Progress</option>
 			<option value="completed">Completed</option>
 			<option value="cancelled">Cancelled</option>
+			<option value="delivered">Delivered</option>
+			<option value="out-for-delivery">Out for Delivery</option>
 		</select>
 	</div>
 	

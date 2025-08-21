@@ -14,10 +14,20 @@
 	$: currentLang = $languageStore;
 	$: currentTheme = $themeStore;
 	$: isAuthenticated = $authStore.isAuthenticated;
+	$: user = $authStore.user;
+	
+	// Check if user is a driver based on permissions
+	function isDriver(user) {
+		return user?.permissions?.accessType === 'driver';
+	}
 	
 	// Redirect if already authenticated
-	$: if (isAuthenticated) {
-		goto('/client');
+	$: if (isAuthenticated && user) {
+		if (isDriver(user)) {
+			goto('/driver');
+		} else {
+			goto('/dashboard');
+		}
 	}
 	
 	async function handleLogin() {
@@ -38,7 +48,12 @@
 			await authStore.login(email, password);
 			// Redirect will happen automatically due to reactive statement
 		} catch (err) {
-			error = err.message || t('loginFailed');
+			// Check if it's a 400 error (Bad Request) which typically means incorrect credentials
+			if (err.message && (err.message.includes('status: 400') || err.message.includes('Bad Request'))) {
+				error = currentLang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Incorrect email or password';
+			} else {
+				error = err.message || t('loginFailed');
+			}
 		} finally {
 			isLoading = false;
 		}

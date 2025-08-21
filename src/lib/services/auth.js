@@ -95,7 +95,8 @@ export class AuthService {
 	async getMe() {
 		try {
 			const response = await apiService.get('/users/me');
-			return response;
+			// Handle both direct response and wrapped response
+			return response.data || response;
 		} catch (error) {
 			throw new Error('Get user failed: ' + error.message);
 		}
@@ -105,7 +106,8 @@ export class AuthService {
 	async updateMe(userData) {
 		try {
 			const response = await apiService.patch('/users/me', userData);
-			return response;
+			// Handle both direct response and wrapped response
+			return response.data || response;
 		} catch (error) {
 			throw new Error('Update profile failed: ' + error.message);
 		}

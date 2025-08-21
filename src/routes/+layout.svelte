@@ -5,6 +5,9 @@
 	import { authStore } from '$lib/stores/auth.js';
 	import { themeStore } from '$lib/stores/theme.js';
 	import { languageStore, t } from '$lib/stores/language.js';
+	import NotificationBell from '$lib/components/NotificationBell.svelte';
+	import NotificationSidebar from '$lib/components/NotificationSidebar.svelte';
+	import UserProfileSidebar from '$lib/components/UserProfileSidebar.svelte';
 	import '$lib/styles/global.css';
 	import '$lib/styles/components.css';
 	
@@ -15,36 +18,38 @@
 	$: user = $authStore.user;
 	$: currentPath = $page.url.pathname;
 	
-	// Navigation items
-	$: navigationItems = [
-		{ 
-			href: '/client', 
-			label: t('home'), 
-			icon: 'home',
-			public: true 
-		},
-		{ 
-			href: '/client/orders', 
-			label: t('myOrders'), 
-			icon: 'orders',
-			public: false 
-		},
-		{ 
-			href: '/client/profile', 
-			label: t('profile'), 
-			icon: 'profile',
-			public: false 
-		},
-		{ 
-			href: '/client/password', 
-			label: t('password'), 
-			icon: 'password',
-			public: false 
-		}
-	];
+	// No navigation items needed anymore
 	
-	// Show mobile menu
+	// Show mobile menu and sidebars
 	let showMobileMenu = false;
+	let isNotificationSidebarOpen = false;
+	let isUserProfileSidebarOpen = false;
+
+	function toggleNotificationSidebar() {
+		console.log('Toggling notification sidebar. Current state:', isNotificationSidebarOpen);
+		isNotificationSidebarOpen = !isNotificationSidebarOpen;
+		console.log('New state:', isNotificationSidebarOpen);
+		// Close user profile sidebar if open
+		if (isNotificationSidebarOpen && isUserProfileSidebarOpen) {
+			isUserProfileSidebarOpen = false;
+		}
+	}
+
+	function toggleUserProfileSidebar() {
+		isUserProfileSidebarOpen = !isUserProfileSidebarOpen;
+		// Close notification sidebar if open
+		if (isUserProfileSidebarOpen && isNotificationSidebarOpen) {
+			isNotificationSidebarOpen = false;
+		}
+	}
+
+	function toggleMobileMenu() {
+		showMobileMenu = !showMobileMenu;
+	}
+
+	function closeMobileMenu() {
+		showMobileMenu = false;
+	}
 	
 	onMount(() => {
 		// Initialize auth state
@@ -76,20 +81,32 @@
 	
 	function handleLogout() {
 		authStore.logout();
-		goto('/client');
+		goto('/about');
 	}
 	
-	function toggleMobileMenu() {
-		showMobileMenu = !showMobileMenu;
+	// Check if user is a driver based on permissions
+	function isDriver(user) {
+		return user?.permissions?.accessType === 'driver';
 	}
 	
-	function closeMobileMenu() {
-		showMobileMenu = false;
+	// Check if user is a client (no permissions or role is 'user')
+	function isClient(user) {
+		return !user?.permissions || user?.role === 'user';
 	}
 	
 	// Check if route requires authentication
 	function requiresAuth(path) {
-		const publicRoutes = ['/login', '/client', '/client/signup', '/client/signup/step1', '/client/signup/step2', '/client/forgot-password', '/client/reset-password'];
+		const publicRoutes = [
+			'/login', 
+			'/client', 
+			'/client/signup', 
+			'/client/signup/step1', 
+			'/client/signup/step2', 
+			'/client/forgot-password', 
+			'/client/reset-password',
+			'/about',
+			'/client/products'
+		];
 		return !publicRoutes.includes(path) && !path.startsWith('/products/');
 	}
 	
@@ -110,7 +127,7 @@
 		<nav class="navbar">
 			<div class="nav-container">
 				<!-- Logo -->
-				<a href="/" class="logo" on:click={closeMobileMenu}>
+				<a href={isAuthenticated ? (isDriver(user) ? '/driver' : '/dashboard') : '/about'} class="logo" on:click={closeMobileMenu}>
 					<div class="logo-icon">
 						<img src="/patriot-logo.jpg" alt="Patriot Logo" class="logo-img" />
 					</div>
@@ -118,76 +135,126 @@
 				</a>
 				
 				<!-- Desktop Navigation -->
-				<div class="nav-links desktop-nav">
-					{#each navigationItems as item}
-						{#if item.public || isAuthenticated}
-							<a 
-								href={item.href} 
-								class="nav-link"
-								class:active={currentPath === item.href}
-								on:click={closeMobileMenu}
-							>
-								<span class="nav-icon">
-									{#if item.icon === 'home'}
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<path d="M3 9L12 2L21 9V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-											<path d="M9 22V12H15V22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-										</svg>
-									{:else if item.icon === 'orders'}
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<path d="M9 11H15M9 15H15M17 21H7C5.89543 21 5 20.1046 5 19V5C5 3.89543 5.89543 3 7 3H12.5858C12.851 3 13.1054 3.10536 13.2929 3.29289L19.7071 9.70711C19.8946 9.89464 20 10.149 20 10.4142V19C20 20.1046 19.1046 21 18 21H17Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-										</svg>
-									{:else if item.icon === 'profile'}
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-										</svg>
-									{:else if item.icon === 'password'}
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-											<circle cx="12" cy="16" r="1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-											<path d="M7 11V7C7 5.67392 7.52678 4.40215 8.46447 3.46447C9.40215 2.52678 10.6739 2 12 2C13.3261 2 14.5979 2.52678 15.5355 3.46447C16.4732 4.40215 17 5.67392 17 7V11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-										</svg>
-									{/if}
-								</span>
-								{item.label}
-							</a>
-						{/if}
-					{/each}
+				<div class="nav-links">
+					{#if !isAuthenticated}
+						<!-- Public navigation -->
+						<a href="/about" class="nav-link" class:active={currentPath === '/about'}>
+							{#if currentLang === 'ar'}
+								من نحن
+							{:else}
+								About Us
+							{/if}
+						</a>
+						<a href="/client/products" class="nav-link" class:active={currentPath === '/client/products'}>
+							{#if currentLang === 'ar'}
+								المنتجات
+							{:else}
+								Products
+							{/if}
+						</a>
+					{:else if isDriver(user)}
+						<!-- Driver navigation -->
+						<a href="/driver" class="nav-link" class:active={currentPath === '/driver'}>
+							{#if currentLang === 'ar'}
+								لوحة التحكم
+							{:else}
+								Dashboard
+							{/if}
+						</a>
+						<a href="/driver/available-orders" class="nav-link" class:active={currentPath === '/driver/available-orders'}>
+							{#if currentLang === 'ar'}
+								الطلبات المتاحة
+							{:else}
+								Available Orders
+							{/if}
+						</a>
+						<a href="/driver/out-for-delivery" class="nav-link" class:active={currentPath === '/driver/out-for-delivery'}>
+							{#if currentLang === 'ar'}
+								قيد التوصيل
+							{:else}
+								Out for Delivery
+							{/if}
+						</a>
+						<a href="/driver/delivered" class="nav-link" class:active={currentPath === '/driver/delivered'}>
+							{#if currentLang === 'ar'}
+								تم التسليم
+							{:else}
+								Delivered
+							{/if}
+						</a>
+					{:else}
+						<!-- Client navigation -->
+						<a href="/dashboard" class="nav-link" class:active={currentPath === '/dashboard'}>
+							{#if currentLang === 'ar'}
+								لوحة التحكم
+							{:else}
+								Dashboard
+							{/if}
+						</a>
+						<a href="/client/products" class="nav-link" class:active={currentPath === '/client/products'}>
+							{#if currentLang === 'ar'}
+								المنتجات
+							{:else}
+								Products
+							{/if}
+						</a>
+						<a href="/client/favorites" class="nav-link" class:active={currentPath === '/client/favorites'}>
+							{#if currentLang === 'ar'}
+								المفضلة
+							{:else}
+								Favorites
+							{/if}
+						</a>
+						<a href="/client/orders/create" class="nav-link" class:active={currentPath === '/client/orders/create'}>
+							{#if currentLang === 'ar'}
+								طلب جديد
+							{:else}
+								New Order
+							{/if}
+						</a>
+						<a href="/complaints" class="nav-link" class:active={currentPath === '/complaints'}>
+							{#if currentLang === 'ar'}
+								تقديم شكوى
+							{:else}
+								Complaints
+							{/if}
+						</a>
+					{/if}
 				</div>
 				
 				<!-- Controls -->
 				<div class="nav-controls">
-					<!-- Theme Toggle -->
-					<button class="control-btn theme-toggle" on:click={toggleTheme} title={t('toggleTheme')}>
-						{#if currentTheme === 'dark'}
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-								<path d="M12 1V3M12 21V23M4.22 4.22L5.64 5.64M18.36 18.36L19.78 19.78M1 12H3M21 12H23M4.22 19.78L5.64 18.36M18.36 5.64L19.78 4.22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
-						{:else}
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
-						{/if}
-					</button>
-					
-					<!-- Language Toggle -->
-					<button class="control-btn language-toggle" on:click={toggleLanguage} title={t('toggleLanguage')}>
-						<span class="language-text">
-							{currentLang === 'ar' ? 'EN' : 'ع'}
-						</span>
-					</button>
+					<!-- Notification Bell -->
+					{#if isAuthenticated}
+						<div class="notification-bell-wrapper">
+							<NotificationBell on:click={toggleNotificationSidebar} />
+							<NotificationSidebar isOpen={isNotificationSidebarOpen} onClose={toggleNotificationSidebar} />
+						</div>
+					{/if}
 					
 					<!-- Auth Controls -->
 					{#if isAuthenticated}
-						<div class="user-menu">
-							<span class="user-name">{user?.name || t('user')}</span>
-							<button class="control-btn logout-btn" on:click={handleLogout} title={t('logout')}>
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-									<path d="M9 21H5C4.44772 21 4 20.5523 4 20V4C4 3.44772 4.44772 3 5 3H9M16 17L21 12L16 7M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-								</svg>
-							</button>
-						</div>
+						<button class="user-profile-btn" on:click={toggleUserProfileSidebar}>
+							{#if user?.photoUrl}
+								<img 
+									src={user.photoUrl} 
+									alt="Profile" 
+									class="profile-avatar"
+									on:error={(e) => {
+										console.error('Failed to load profile image:', user.photoUrl);
+										e.target.style.display = 'none';
+										e.target.nextElementSibling?.style.setProperty('display', 'flex');
+									}}
+								/>
+								<div class="profile-avatar-placeholder" style="display: none;">
+									<span>{user?.name?.[0]?.toUpperCase() || 'U'}</span>
+								</div>
+							{:else}
+								<div class="profile-avatar-placeholder">
+									<span>{user?.name?.[0]?.toUpperCase() || 'U'}</span>
+								</div>
+							{/if}
+						</button>
 					{:else}
 						<div class="auth-buttons">
 							<a href="/login" class="auth-btn login-btn">{t('login')}</a>
@@ -209,40 +276,93 @@
 		{#if showMobileMenu}
 			<div class="mobile-nav" class:show={showMobileMenu}>
 				<div class="mobile-nav-content">
-					{#each navigationItems as item}
-						{#if item.public || isAuthenticated}
-							<a 
-								href={item.href} 
-								class="mobile-nav-link"
-								class:active={currentPath === item.href}
-								on:click={closeMobileMenu}
-							>
-								<span class="nav-icon">
-									{#if item.icon === 'home'}
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<path d="M3 9L12 2L21 9V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-											<path d="M9 22V12H15V22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-										</svg>
-									{:else if item.icon === 'orders'}
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<path d="M9 11H15M9 15H15M17 21H7C5.89543 21 5 20.1046 5 19V5C5 3.89543 5.89543 3 7 3H12.5858C12.851 3 13.1054 3.10536 13.2929 3.29289L19.7071 9.70711C19.8946 9.89464 20 10.149 20 10.4142V19C20 20.1046 19.1046 21 18 21H17Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-										</svg>
-									{:else if item.icon === 'profile'}
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-										</svg>
-									{:else if item.icon === 'password'}
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-											<circle cx="12" cy="16" r="1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-											<path d="M7 11V7C7 5.67392 7.52678 4.40215 8.46447 3.46447C9.40215 2.52678 10.6739 2 12 2C13.3261 2 14.5979 2.52678 15.5355 3.46447C16.4732 4.40215 17 5.67392 17 7V11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-										</svg>
-									{/if}
-								</span>
-								{item.label}
+					<!-- Mobile Navigation Links -->
+					<div class="mobile-nav-links">
+						{#if !isAuthenticated}
+							<!-- Public navigation -->
+							<a href="/about" class="mobile-nav-link" class:active={currentPath === '/about'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									من نحن
+								{:else}
+									About Us
+								{/if}
+							</a>
+							<a href="/client/products" class="mobile-nav-link" class:active={currentPath === '/client/products'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									المنتجات
+								{:else}
+									Products
+								{/if}
+							</a>
+						{:else if isDriver(user)}
+							<!-- Driver mobile navigation -->
+							<a href="/driver" class="mobile-nav-link" class:active={currentPath === '/driver'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									لوحة التحكم
+								{:else}
+									Dashboard
+								{/if}
+							</a>
+							<a href="/driver/available-orders" class="mobile-nav-link" class:active={currentPath === '/driver/available-orders'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									الطلبات المتاحة
+								{:else}
+									Available Orders
+								{/if}
+							</a>
+							<a href="/driver/out-for-delivery" class="mobile-nav-link" class:active={currentPath === '/driver/out-for-delivery'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									قيد التوصيل
+								{:else}
+									Out for Delivery
+								{/if}
+							</a>
+							<a href="/driver/delivered" class="mobile-nav-link" class:active={currentPath === '/driver/delivered'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									تم التسليم
+								{:else}
+									Delivered
+								{/if}
+							</a>
+						{:else}
+							<!-- Client mobile navigation -->
+							<a href="/dashboard" class="mobile-nav-link" class:active={currentPath === '/dashboard'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									لوحة التحكم
+								{:else}
+									Dashboard
+								{/if}
+							</a>
+							<a href="/client/products" class="mobile-nav-link" class:active={currentPath === '/client/products'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									المنتجات
+								{:else}
+									Products
+								{/if}
+							</a>
+							<a href="/client/favorites" class="mobile-nav-link" class:active={currentPath === '/client/favorites'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									المفضلة
+								{:else}
+									Favorites
+								{/if}
+							</a>
+							<a href="/client/orders/create" class="mobile-nav-link" class:active={currentPath === '/client/orders/create'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									طلب جديد
+								{:else}
+									New Order
+								{/if}
+							</a>
+							<a href="/complaints" class="mobile-nav-link" class:active={currentPath === '/complaints'} on:click={closeMobileMenu}>
+								{#if currentLang === 'ar'}
+									تقديم شكوى
+								{:else}
+									Complaints
+								{/if}
 							</a>
 						{/if}
-					{/each}
+					</div>
 					
 					<!-- Mobile Auth Controls -->
 					{#if !isAuthenticated}
@@ -251,18 +371,17 @@
 							<a href="/client/signup/step1" class="mobile-auth-btn signup-btn" on:click={closeMobileMenu}>{t('signup')}</a>
 						</div>
 					{:else}
-						<button class="mobile-logout-btn" on:click={handleLogout}>
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<path d="M9 21H5C4.44772 21 4 20.5523 4 20V4C4 3.44772 4.44772 3 5 3H9M16 17L21 12L16 7M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
-							{t('logout')}
-						</button>
+						<p class="mobile-user-info">Welcome, {user?.name || 'User'}!</p>
+						<p class="mobile-note">Use your profile picture to access menu options.</p>
 					{/if}
 				</div>
 			</div>
 		{/if}
 	</header>
 	
+	<!-- User Profile Sidebar -->
+	<UserProfileSidebar isOpen={isUserProfileSidebarOpen} onClose={() => isUserProfileSidebarOpen = false} />
+
 	<!-- Main Content -->
 	<main class="main-content">
 		<slot />
@@ -293,7 +412,6 @@
 					<ul class="footer-links">
 						<li><a href="/client">{t('home')}</a></li>
 						{#if isAuthenticated}
-							<li><a href="/client/orders">{t('myOrders')}</a></li>
 							<li><a href="/client/profile">{t('profile')}</a></li>
 						{/if}
 					</ul>
@@ -314,6 +432,7 @@
 			</div>
 		</div>
 	</footer>
+	
 </div>
 
 <style>
@@ -400,7 +519,7 @@
 	}
 
 	/* Desktop Navigation */
-	.desktop-nav {
+	.nav-links {
 		display: flex;
 		align-items: center;
 		gap: 2rem;
@@ -463,16 +582,69 @@
 		font-size: 0.875rem;
 	}
 
-	/* User Menu */
-	.user-menu {
+	/* User Profile Button */
+	.user-profile-btn {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		overflow: hidden;
+		border: 2px solid var(--border-color);
+		background: transparent;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		padding: 0;
 	}
 
-	.user-name {
-		color: var(--text-primary);
-		font-weight: 500;
+	.user-profile-btn:hover {
+		border-color: #3b82f6;
+		transform: scale(1.05);
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+	}
+
+	/* Profile Avatar */
+	.user-profile {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.profile-avatar {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		object-fit: cover;
+		border: 2px solid var(--border-color);
+		transition: all 0.3s ease;
+	}
+
+	.profile-avatar:hover {
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+	}
+
+	.profile-avatar-placeholder {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: linear-gradient(135deg, #3b82f6, #2563eb);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: white;
+		font-weight: 600;
+		font-size: 16px;
+		border: 2px solid var(--border-color);
+		transition: all 0.3s ease;
+		cursor: pointer;
+	}
+
+	.profile-avatar-placeholder:hover {
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+		transform: scale(1.05);
 	}
 
 	/* Auth Buttons */
@@ -520,6 +692,21 @@
 		padding: 0.5rem;
 	}
 
+	/* Responsive Design */
+	@media (max-width: 768px) {
+		.nav-links {
+			display: none;
+		}
+
+		.mobile-menu-toggle {
+			display: block;
+		}
+
+		.auth-buttons {
+			display: none;
+		}
+	}
+
 	/* Mobile Navigation */
 	.mobile-nav {
 		display: none;
@@ -541,6 +728,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	.mobile-nav-links {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
 	}
 
 	.mobile-nav-link {
@@ -610,6 +804,24 @@
 
 	.mobile-logout-btn:hover {
 		background: rgba(239, 68, 68, 0.1);
+	}
+
+	.mobile-user-info {
+		padding: 16px 20px 8px;
+		margin: 0;
+		font-size: 16px;
+		font-weight: 600;
+		color: var(--text-primary);
+		text-align: center;
+	}
+
+	.mobile-note {
+		padding: 0 20px 16px;
+		margin: 0;
+		font-size: 14px;
+		color: var(--text-secondary);
+		text-align: center;
+		font-style: italic;
 	}
 
 	/* Main Content */
@@ -754,6 +966,12 @@
 
 	[data-theme="dark"] .header {
 		background: rgba(30, 41, 59, 0.95);
+	}
+
+	/* Notification Bell Wrapper */
+	.notification-bell-wrapper {
+		position: relative;
+		display: inline-block;
 	}
 </style>
 

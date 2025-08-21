@@ -27,7 +27,7 @@ export class OrdersService {
 	// Get all orders
 	async getAllOrders() {
 		try {
-			const response = await apiService.get('/orders');
+			// Check authentication first
 			let userId = null;
 			authStore.subscribe(state => {
 				if (state.user) {
@@ -38,6 +38,9 @@ export class OrdersService {
 			if (!userId) {
 				throw new Error('401 Not Authorized: User not logged in.');
 			}
+
+			// Make authenticated API call
+			const response = await apiService.get('/orders');
 
 			// Handle API response structure: { results: Order[], total: number }
 			let orders = [];
@@ -147,6 +150,16 @@ export class OrdersService {
 			return response;
 		} catch (error) {
 			throw new Error('Failed to verify order code: ' + error.message);
+		}
+	}
+
+	// Get order statistics for dashboard
+	async getOrderStatistics() {
+		try {
+			const response = await apiService.get('/home/me/statistics');
+			return response;
+		} catch (error) {
+			throw new Error('Failed to fetch order statistics: ' + error.message);
 		}
 	}
 }

@@ -1,8 +1,10 @@
 <script>
 	import { onMount } from 'svelte';
 	import { authService } from '$lib/services/auth.js';
+	import { authStore } from '$lib/stores/auth.js';
 	import { statesService } from '$lib/services/states.js';
 	import { citiesService } from '$lib/services/cities.js';
+	import { imageUploadService } from '$lib/services/imageUpload.js';
 	import { languageStore } from '$lib/stores/language.js';
 	
 	let isEditing = false;
@@ -41,10 +43,15 @@
 	async function loadProfile() {
 		isLoading = true;
 		try {
-			const [user, statesResponse] = await Promise.all([
-				authService.getMe(),
-				statesService.getAllStates()
-			]);
+			// First try to get user from auth store
+			let user = $authStore.user;
+			
+			// If no user in store, try to fetch from API
+			if (!user) {
+				user = await authService.getMe();
+			}
+			
+			const statesResponse = await statesService.getAllStates();
 			
 			profileData = {
 				id: user.id,
@@ -170,6 +177,9 @@
 			profileData = { ...updatedUser };
 			isEditing = false;
 			
+			// Update the auth store with the new user data
+			authStore.updateUser(updatedUser);
+			
 			alert('Profile updated successfully!');
 			
 		} catch (error) {
@@ -180,40 +190,59 @@
 		}
 	}
 	
-	function handlePhotoUpload(event) {
+	async function handlePhotoUpload(event) {
 		const file = event.target.files[0];
-		if (file) {
-			if (file.size > 5 * 1024 * 1024) {
-				errors.photoUrl = 'Photo must be less than 5MB';
-				return;
-			}
-			
-			if (!file.type.startsWith('image/')) {
-				errors.photoUrl = 'Please select a valid image file';
-				return;
-			}
-			
-			// For simplicity, we'll just set the preview.
-			// Actual upload to a service like AWS S3 would be needed here
-			// and then update editData.photoUrl with the returned URL.
-			editData.photoUrl = URL.createObjectURL(file); // Use URL.createObjectURL for preview
-			const reader = new FileReader();
-			reader.onload = (e) => {
-				photoPreview = e.target.result;
-			};
-			reader.readAsDataURL(file);
-			
+		if (!file) return;
+
+		try {
+			// Clear any previous errors
 			if (errors.photoUrl) {
 				delete errors.photoUrl;
 				errors = { ...errors };
 			}
+
+			// Validate the image file using the service
+			imageUploadService.validateImageFile(file);
+
+			// Create preview immediately for better UX
+			photoPreview = imageUploadService.createPreviewUrl(file);
+
+			// Show loading state
+			isLoading = true;
+
+			// Upload the image and get the URL
+			const uploadedImageUrl = await imageUploadService.uploadImage(file, profileData.id);
+			
+			// Update editData with the actual uploaded image URL
+			editData.photoUrl = uploadedImageUrl;
+			
+			console.log('Image uploaded successfully:', uploadedImageUrl);
+
+		} catch (error) {
+			console.error('Failed to upload image:', error);
+			errors.photoUrl = error.message;
+			errors = { ...errors };
+			
+			// Clear the preview on error
+			if (photoPreview) {
+				imageUploadService.revokePreviewUrl(photoPreview);
+				photoPreview = null;
+			}
+		} finally {
+			isLoading = false;
 		}
 	}
 	
 	function cancelEdit() {
 		isEditing = false;
 		editData = { ...profileData };
-		photoPreview = null;
+		
+		// Clean up preview URL if it exists
+		if (photoPreview) {
+			imageUploadService.revokePreviewUrl(photoPreview);
+			photoPreview = null;
+		}
+		
 		errors = {};
 		
 		// Reset address-related data
@@ -252,7 +281,19 @@
 			<div class="profile-header">
 				<div class="profile-photo-section">
 					{#if photoPreview || profileData.photoUrl}
-						<img src={photoPreview || profileData.photoUrl} alt="Profile" class="profile-photo" />
+						<img 
+							src={photoPreview || profileData.photoUrl} 
+							alt="Profile" 
+							class="profile-photo"
+							on:error={(e) => {
+								console.error('Failed to load profile image:', photoPreview || profileData.photoUrl);
+								e.target.style.display = 'none';
+								e.target.nextElementSibling?.style.setProperty('display', 'flex');
+							}}
+						/>
+						<div class="profile-photo-placeholder" style="display: none;">
+							<span>{profileData.name?.[0] || 'U'}</span>
+						</div>
 					{:else}
 						<div class="profile-photo-placeholder">
 							<span>{profileData.name?.[0] || 'U'}</span>
@@ -267,9 +308,15 @@
 								accept="image/*"
 								on:change={handlePhotoUpload}
 								class="photo-input"
+								disabled={isLoading}
 							/>
-							<label for="profilePhoto" class="photo-upload-btn">
-								Change Photo
+							<label for="profilePhoto" class="photo-upload-btn" class:disabled={isLoading}>
+								{#if isLoading}
+									<span class="spinner-small"></span>
+									Uploading...
+								{:else}
+									Change Photo
+								{/if}
 							</label>
 							{#if errors.photoUrl}
 								<span class="error-message">{errors.photoUrl}</span>

@@ -46,7 +46,7 @@ export class ProductsService {
 		try {
 			const response = await apiService.get('/products');
 			
-			// Extract products from response.results (not response.result)
+			// Extract products from response.results
 			const products = response.results || [];
 			
 			// Filter products by category name
