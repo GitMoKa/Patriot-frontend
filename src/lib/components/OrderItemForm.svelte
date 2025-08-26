@@ -4,6 +4,8 @@
 	import { categoriesService } from '$lib/services/categories.js';
 	import { materialsService } from '$lib/services/materials.js';
 	import { stagesService } from '$lib/services/stages.js';
+	import { imageUploadService } from '$lib/services/imageUpload.js';
+	import { authService } from '$lib/services/auth.js';
 	import { t, languageStore } from '$lib/stores/language.js';
 
 	export let showModal = false;
@@ -11,13 +13,14 @@
 	const dispatch = createEventDispatcher();
 
 	// Modal states
-	let currentStep = 1; // 1 = category/product selection, 2 = product dimensions, 3 = custom item details
+	let currentStep = 1; // 1 = category/product selection, 2 = product dimensions, 3 = painting choosing (special product), 4 = custom item details
 	
 	// Data arrays
 	let categories = [];
 	let products = [];
 	let materials = [];
 	let stages = [];
+	let stagePatterns = [];
 
 	// Form data
 	let selectedCategory = null;
@@ -34,6 +37,14 @@
 		materialId: null,
 		selectedStages: []
 	};
+
+	// Painting choosing logic for special product
+	let useCustomPattern = false; // Checkbox state
+	let selectedStagePattern = null; // Selected pattern from cards
+	let uploadedPatternImage = null; // Uploaded image file
+	let uploadedPatternImageUrl = ''; // Final uploaded image URL
+	let isUploadingImage = false;
+	let hasPaintingData = false; // Track if user has completed painting step
 
 	let isLoading = false;
 	let error = '';
@@ -146,6 +157,12 @@
 
 	// Check if current product is the special product that needs stage selection
 	$: isSpecialProduct = selectedProduct?.id === "65f5d608-ccf0-4db4-b114-6707a6ba9049";
+	
+	// Check if the special painting stage is selected
+	$: hasSpecialPaintingStage = productAdditionalStages.some(stage => stage.id === "277e2b35-8167-41c8-93fd-867fdf202304");
+	
+	// Show painting step only if both conditions are met: special product AND painting stage selected
+	$: showPaintingStep = isSpecialProduct && hasSpecialPaintingStage;
 
 	// Get available stages for the special product (exclude stages the product already has)
 	$: availableStagesForProduct = isSpecialProduct 
@@ -170,18 +187,60 @@
 		error = '';
 	}
 
+	async function handleNextStepFromDimensions() {
+		// If this is the special product AND the painting stage is selected, go to painting choosing step
+		if (showPaintingStep) {
+			currentStep = 3;
+			// Load stage patterns if not already loaded
+			if (stagePatterns.length === 0) {
+				await loadStagePatterns();
+			}
+		} else {
+			// For regular products or special product without painting stage, complete the order
+			handleConfirmProduct();
+		}
+		error = '';
+	}
+
+	async function loadStagePatterns() {
+		try {
+			isLoading = true;
+			const patternsResponse = await stagesService.getStagePatterns();
+			console.log('Stage patterns response:', patternsResponse);
+			
+			// Handle different response structures
+			if (patternsResponse.results && Array.isArray(patternsResponse.results)) {
+				stagePatterns = patternsResponse.results;
+			} else if (patternsResponse.patterns && Array.isArray(patternsResponse.patterns)) {
+				stagePatterns = patternsResponse.patterns;
+			} else if (Array.isArray(patternsResponse)) {
+				stagePatterns = patternsResponse;
+			} else {
+				stagePatterns = [];
+			}
+			
+			console.log('Processed stage patterns:', stagePatterns);
+		} catch (err) {
+			error = 'Failed to load stage patterns: ' + err.message;
+			console.error('Stage patterns error:', err);
+		} finally {
+			isLoading = false;
+		}
+	}
+
 	function handleConfirmProduct() {
 		// Add product with modified dimensions to order
 		const productItem = {
 			width: productDimensions.width,
 			height: productDimensions.height,
 			productId: selectedProduct.id,
-			categoryId: selectedCategory === 'no-category' ? undefined : selectedCategory?.id,
-			category: selectedCategory === 'no-category' ? undefined : selectedCategory,
-			currentStage: { id: '8ad600bc-4a2b-4953-9dd5-a4a9ba1e1978' },
-			currentStageId: '8ad600bc-4a2b-4953-9dd5-a4a9ba1e1978',
-			type: 'product'
+			stageIds:[]
 		};
+
+		// Add optional category if selected (and not 'no-category')
+		if (selectedCategory && selectedCategory !== 'no-category') {
+			productItem.categoryId = selectedCategory.id;
+		}
 
 		// Add note if provided
 		if (itemNote.trim()) {
@@ -191,11 +250,75 @@
 		// Add additional stages for special product
 		if (isSpecialProduct && productAdditionalStages.length > 0) {
 			productItem.stageIds = productAdditionalStages.map(stage => stage.id);
-			productItem.stages = productAdditionalStages;
 		}
 
+		// Add painting data if user completed painting step
+		if (hasPaintingData) {
+			if (selectedStagePattern) {
+				productItem.stagePatternId = selectedStagePattern.id;
+			} else if (uploadedPatternImageUrl) {
+				productItem.patternImageUrl = uploadedPatternImageUrl;
+			}
+		}
+
+		console.log('Sending product item to server:', productItem);
+		console.log('productItem stages :', productItem.stageIds);
 		dispatch('addItem', productItem);
 		closeModal();
+	}
+
+	async function handleImageUpload(event) {
+		const file = event.target.files[0];
+		if (!file) return;
+
+		try {
+			// Validate the image file
+			imageUploadService.validateImageFile(file);
+			
+			isUploadingImage = true;
+			error = '';
+			
+			// Get current user info
+			const currentUser = await authService.getMe();
+			if (!currentUser?.id) {
+				throw new Error('User not authenticated');
+			}
+			
+			// Upload the image
+			uploadedPatternImageUrl = await imageUploadService.uploadImage(file, currentUser.id);
+			uploadedPatternImage = file;
+			
+			// Clear selected pattern since we're using custom image
+			selectedStagePattern = null;
+			
+		} catch (err) {
+			error = 'Image upload failed: ' + err.message;
+			uploadedPatternImageUrl = '';
+			uploadedPatternImage = null;
+		} finally {
+			isUploadingImage = false;
+		}
+	}
+
+	function selectStagePattern(pattern) {
+		selectedStagePattern = pattern;
+		// Clear uploaded image since we're using a pattern
+		uploadedPatternImageUrl = '';
+		uploadedPatternImage = null;
+	}
+
+	function handleConfirmPainting() {
+		// Validate that either a pattern is selected or an image is uploaded
+		if (!selectedStagePattern && !uploadedPatternImageUrl) {
+			error = 'Please select a stage pattern or upload a custom image.';
+			return;
+		}
+
+		// Mark that user has completed painting step
+		hasPaintingData = true;
+		
+		// Complete the order
+		handleConfirmProduct();
 	}
 
 	function toggleProductStage(stage) {
@@ -219,20 +342,20 @@
 		const newCustomItem = {
 			width: customItem.width,
 			height: customItem.height,
-			materialId: customItem.materialId || undefined,
-			material: customItem.materialId ? materials.find(m => m.id === customItem.materialId) : undefined,
-			stageIds: customItem.selectedStages.map(stage => stage.id),
-			stages: customItem.selectedStages,
-			currentStage: { id: '8ad600bc-4a2b-4953-9dd5-a4a9ba1e1978' },
-			currentStageId: '8ad600bc-4a2b-4953-9dd5-a4a9ba1e1978',
-			type: 'custom'
+			stageIds: customItem.selectedStages.map(stage => stage.id)
 		};
+
+		// Add optional material if selected
+		if (customItem.materialId) {
+			newCustomItem.materialId = customItem.materialId;
+		}
 
 		// Add note if provided
 		if (itemNote.trim()) {
 			newCustomItem.note = itemNote.trim();
 		}
 
+		console.log('Sending custom item to server:', newCustomItem);
 		dispatch('addItem', newCustomItem);
 		closeModal();
 	}
@@ -258,6 +381,15 @@
 			materialId: null,
 			selectedStages: []
 		};
+
+		// Reset painting choosing data
+		useCustomPattern = false;
+		selectedStagePattern = null;
+		uploadedPatternImage = null;
+		uploadedPatternImageUrl = '';
+		isUploadingImage = false;
+		hasPaintingData = false;
+		stagePatterns = [];
 		
 		dispatch('close');
 	}
@@ -281,6 +413,8 @@
 					Add Item - Select Product
 				{:else if currentStep === 2}
 					Add Item - Product Dimensions
+				{:else if currentStep === 3}
+					Add Item - Choose Painting
 				{:else}
 					Add Item - Custom Details
 				{/if}
@@ -405,12 +539,93 @@
 					<div class="modal-actions">
 						<button type="button" class="cancel-button" on:click={closeModal}>Cancel</button>
 						<button type="button" class="back-button" on:click={() => currentStep = 1}>Back</button>
-						<button type="button" class="confirm-button" on:click={handleConfirmProduct}>Add to Order</button>
+						{#if showPaintingStep}
+							<button type="button" class="next-button" on:click={handleNextStepFromDimensions}>Next Step</button>
+						{:else}
+							<button type="button" class="confirm-button" on:click={handleConfirmProduct}>Add to Order</button>
+						{/if}
 					</div>
 				</div>
 
 			{:else if currentStep === 3}
-				<!-- Step 3: Custom Item Details -->
+				<!-- Step 3: Painting Choosing (Special Product Only) -->
+				<div class="step-content">
+					<div class="product-info">
+						<h3>Choose Painting Pattern</h3>
+						<p>Select a predefined pattern or upload your own custom image.</p>
+					</div>
+
+					<div class="form-group">
+						<label class="checkbox-label">
+							<input 
+								type="checkbox" 
+								bind:checked={useCustomPattern}
+								on:change={() => {
+									// Reset selections when toggling
+									selectedStagePattern = null;
+									uploadedPatternImageUrl = '';
+									uploadedPatternImage = null;
+								}}
+							>
+							Use custom pattern (upload image)
+						</label>
+					</div>
+
+					{#if !useCustomPattern}
+						<!-- Show stage patterns as cards -->
+						<div class="form-group">
+							<label>Select a Pattern</label>
+							{#if isLoading}
+								<p>Loading patterns...</p>
+							{:else if stagePatterns.length > 0}
+								<div class="patterns-container">
+									{#each stagePatterns as pattern}
+										<div 
+											class="pattern-card {selectedStagePattern?.id === pattern.id ? 'selected' : ''}"
+											on:click={() => selectStagePattern(pattern)}
+										>
+											{#if pattern.imageUrl}
+												<img src={pattern.imageUrl} alt={getLocalizedName({name: pattern.title}) || pattern.title?.en || pattern.title?.ar || 'Pattern'} />
+											{/if}
+											<div class="pattern-title">{getLocalizedName({name: pattern.title}) || pattern.title?.en || pattern.title?.ar || 'Untitled Pattern'}</div>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<p class="no-patterns-text">No patterns available.</p>
+							{/if}
+						</div>
+					{:else}
+						<!-- Show image upload field -->
+						<div class="form-group">
+							<label for="pattern-image">Upload Custom Pattern Image</label>
+							<input 
+								type="file" 
+								id="pattern-image"
+								accept="image/*"
+								on:change={handleImageUpload}
+								disabled={isUploadingImage}
+							>
+							{#if isUploadingImage}
+								<p class="upload-status">Uploading image...</p>
+							{:else if uploadedPatternImageUrl}
+								<div class="uploaded-image-preview">
+									<img src={uploadedPatternImageUrl} alt="Uploaded pattern" />
+									<p class="upload-success">Image uploaded successfully!</p>
+								</div>
+							{/if}
+						</div>
+					{/if}
+
+					<div class="modal-actions">
+						<button type="button" class="cancel-button" on:click={closeModal}>Cancel</button>
+						<button type="button" class="back-button" on:click={() => currentStep = 2}>Back</button>
+						<button type="button" class="confirm-button" on:click={handleConfirmPainting}>Confirm</button>
+					</div>
+				</div>
+
+			{:else if currentStep === 4}
+				<!-- Step 4: Custom Item Details -->
 				<div class="step-content">
 					<div class="dimensions-row">
 						<div class="form-group">
@@ -837,5 +1052,128 @@
 	textarea::placeholder {
 		color: var(--text-secondary);
 		opacity: 0.7;
+	}
+
+	/* Painting choosing styles */
+	.checkbox-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		font-weight: 500;
+		color: var(--text-primary);
+		margin-bottom: 1rem;
+	}
+
+	.checkbox-label input[type="checkbox"] {
+		width: auto;
+		margin: 0;
+	}
+
+	.patterns-container {
+		display: flex;
+		gap: 1rem;
+		overflow-x: auto;
+		padding: 1rem 0;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		background: var(--bg-secondary);
+		max-height: 300px;
+	}
+
+	.pattern-card {
+		flex: 0 0 auto;
+		width: 150px;
+		border: 2px solid var(--border-color);
+		border-radius: 8px;
+		padding: 0.5rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		background: var(--bg-primary);
+	}
+
+	.pattern-card:hover {
+		border-color: var(--primary-color);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	}
+
+	.pattern-card.selected {
+		border-color: #3b82f6;
+		background: rgba(59, 130, 246, 0.1);
+	}
+
+	.pattern-card img {
+		width: 100%;
+		height: 100px;
+		object-fit: cover;
+		border-radius: 4px;
+		margin-bottom: 0.5rem;
+	}
+
+	.pattern-title {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--text-primary);
+		text-align: center;
+		line-height: 1.2;
+	}
+
+	.no-patterns-text {
+		text-align: center;
+		color: var(--text-secondary);
+		font-style: italic;
+		padding: 2rem;
+	}
+
+	.upload-status {
+		color: var(--primary-color);
+		font-size: 0.875rem;
+		margin-top: 0.5rem;
+		font-style: italic;
+	}
+
+	.uploaded-image-preview {
+		margin-top: 1rem;
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		padding: 1rem;
+		background: var(--bg-secondary);
+	}
+
+	.uploaded-image-preview img {
+		width: 100%;
+		max-width: 200px;
+		height: auto;
+		border-radius: 4px;
+		margin-bottom: 0.5rem;
+	}
+
+	.upload-success {
+		color: #10b981;
+		font-size: 0.875rem;
+		margin: 0;
+		font-weight: 500;
+	}
+
+	input[type="file"] {
+		width: 100%;
+		padding: 0.75rem;
+		border: 2px dashed var(--border-color);
+		border-radius: 8px;
+		background: var(--bg-secondary);
+		color: var(--text-primary);
+		font-size: 1rem;
+		cursor: pointer;
+		transition: border-color 0.2s;
+	}
+
+	input[type="file"]:hover {
+		border-color: var(--primary-color);
+	}
+
+	input[type="file"]:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 </style>

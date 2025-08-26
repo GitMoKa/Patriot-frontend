@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { notificationStore } from '../stores/notifications.js';
   import { languageStore } from '../stores/language';
 
@@ -38,6 +39,25 @@
   const handleDismissAll = () => {
     notificationStore.dismissAll();
   };
+
+  const handleNotificationClick = (notification) => {
+    // Mark notification as seen if it's unread
+    if (!notification.isSeen) {
+      notificationStore.dismiss([notification.id]);
+    }
+    
+    // Redirect based on notification type and recordId
+    if (notification.type && notification.recordId) {
+      const redirectPath = `/client/${notification.type}s/${notification.recordId}`;
+      console.log('Redirecting to:', redirectPath);
+      goto(redirectPath);
+      
+      // Close the notification sidebar
+      onClose();
+    } else {
+      console.warn('Notification missing type or recordId:', notification);
+    }
+  };
 </script>
 
 {#if isOpen}
@@ -74,7 +94,10 @@
       {:else}
         <div class="notification-list">
           {#each notifications as notification (notification.id)}
-            <div class="notification-item {!notification.isSeen ? 'unread' : 'read'}">
+            <div 
+              class="notification-item {!notification.isSeen ? 'unread' : 'read'}"
+              on:click={() => handleNotificationClick(notification)}
+            >
               <div class="notification-content-wrapper">
                 <div class="notification-text">
                   <p class="notification-item-title">{notification.title[currentLanguage] || notification.title.en}</p>
@@ -83,7 +106,7 @@
                   {/if}
                 </div>
                 <button
-                  on:click={() => handleDismiss(notification.id)}
+                  on:click|stopPropagation={() => handleDismiss(notification.id)}
                   class="dismiss-btn {currentLanguage === 'ar' ? 'dismiss-btn-rtl' : 'dismiss-btn-ltr'}"
                   title="Dismiss"
                 >

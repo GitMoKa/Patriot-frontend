@@ -10,6 +10,11 @@ export class ComplaintsService {
 				userId: complaintData.userId
 			};
 
+			// Add file URL if provided (sent as "fileUrl" to match server expectation)
+			if (complaintData.attachmentUrl) {
+				dataToSend.fileUrl = complaintData.attachmentUrl;
+			}
+
 			const response = await apiService.post('/complaints', dataToSend);
 			return response;
 		} catch (error) {

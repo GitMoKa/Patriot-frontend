@@ -95,11 +95,31 @@ export class ImageUploadService {
 	}
 
 	/**
-	 * Validate image file
+	 * Validate file size
 	 * @param {File} file - The file to validate
+	 * @param {number} maxSizeMB - Maximum file size in MB (default: 5MB)
 	 * @returns {boolean} - True if valid
 	 */
-	validateImageFile(file) {
+	validateFileSize(file, maxSizeMB = 5) {
+		if (!file) {
+			throw new Error('No file provided for size validation');
+		}
+
+		const maxSizeBytes = maxSizeMB * 1024 * 1024; // Convert MB to bytes
+		if (file.size > maxSizeBytes) {
+			throw new Error(`File size too large. Maximum size is ${maxSizeMB}MB.`);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validate image file
+	 * @param {File} file - The file to validate
+	 * @param {number} maxSizeMB - Maximum file size in MB (default: 5MB)
+	 * @returns {boolean} - True if valid
+	 */
+	validateImageFile(file, maxSizeMB = 5) {
 		// Check if file exists
 		if (!file) {
 			throw new Error('No file provided');
@@ -111,11 +131,8 @@ export class ImageUploadService {
 			throw new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.');
 		}
 
-		// Check file size (5MB limit)
-		const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-		if (file.size > maxSize) {
-			throw new Error('File size too large. Maximum size is 5MB.');
-		}
+		// Use the dedicated file size validation method
+		this.validateFileSize(file, maxSizeMB);
 
 		return true;
 	}

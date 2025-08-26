@@ -5,6 +5,8 @@
 	import { complaintsService } from '$lib/services/complaints.js';
 	import { languageStore, t } from '$lib/stores/language.js';
 	import { themeStore } from '$lib/stores/theme.js';
+	import { imageUploadService } from '$lib/services/imageUpload.js';
+	import { authService } from '$lib/services/auth.js';
 	
 	// Reactive statements
 	$: isAuthenticated = $authStore.isAuthenticated;
@@ -17,6 +19,12 @@
 	let isSubmitting = false;
 	let error = null;
 	let showConfirmation = false;
+	
+	// File upload state
+	let selectedFile = null;
+	let uploadedFileUrl = '';
+	let isUploadingFile = false;
+	let fileUploadError = '';
 	
 	// Form validation
 	$: isFormValid = description.trim().length > 0;
@@ -47,6 +55,11 @@
 				userId: userId
 			};
 			
+			// Add file URL if uploaded
+			if (uploadedFileUrl) {
+				complaintData.attachmentUrl = uploadedFileUrl;
+			}
+			
 			console.log('Sending complaint data:', complaintData);
 			
 			await complaintsService.createComplaint(complaintData);
@@ -69,6 +82,49 @@
 	
 	function handleCancel() {
 		goto(isAuthenticated ? '/dashboard' : '/about');
+	}
+	
+	// File upload handling
+	async function handleFileUpload(event) {
+		const file = event.target.files[0];
+		if (!file) return;
+
+		try {
+			// Validate file size only (10MB limit for complaint attachments)
+			imageUploadService.validateFileSize(file, 10);
+			
+			isUploadingFile = true;
+			fileUploadError = '';
+			
+			// Get current user info
+			const currentUser = await authService.getMe();
+			if (!currentUser?.id) {
+				throw new Error('User not authenticated');
+			}
+			
+			// Upload the file
+			uploadedFileUrl = await imageUploadService.uploadImage(file, currentUser.id);
+			selectedFile = file;
+			
+			console.log('File uploaded successfully:', uploadedFileUrl);
+			
+		} catch (err) {
+			fileUploadError = err.message || 'File upload failed';
+			uploadedFileUrl = '';
+			selectedFile = null;
+			console.error('File upload error:', err);
+		} finally {
+			isUploadingFile = false;
+		}
+	}
+
+	function removeFile() {
+		selectedFile = null;
+		uploadedFileUrl = '';
+		fileUploadError = '';
+		// Clear the file input
+		const fileInput = document.getElementById('complaint-file');
+		if (fileInput) fileInput.value = '';
 	}
 	
 	// Initialize auth and ensure user data is loaded
@@ -167,6 +223,84 @@
 								يرجى تقديم أكبر قدر من التفاصيل لمساعدتنا في فهم المشكلة
 							{:else}
 								Please provide as much detail as possible to help us understand the issue
+							{/if}
+						</div>
+					</div>
+
+					<!-- File Upload Section -->
+					<div class="form-group">
+						<label for="complaint-file" class="form-label">
+							{#if currentLang === 'ar'}
+								إرفاق ملف (اختياري)
+							{:else}
+								Attach File (Optional)
+							{/if}
+						</label>
+						<div class="file-upload-container">
+							<input
+								type="file"
+								id="complaint-file"
+								class="file-input"
+								on:change={handleFileUpload}
+								disabled={isSubmitting || isUploadingFile}
+								accept="*/*"
+							/>
+							<label for="complaint-file" class="file-upload-label" class:disabled={isSubmitting || isUploadingFile}>
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+									<path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+									<path d="M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<span>
+									{#if isUploadingFile}
+										{#if currentLang === 'ar'}
+											جاري الرفع...
+										{:else}
+											Uploading...
+										{/if}
+									{:else if selectedFile}
+										{#if currentLang === 'ar'}
+											تغيير الملف
+										{:else}
+											Change File
+										{/if}
+									{:else}
+										{#if currentLang === 'ar'}
+											اختر ملف للرفع
+										{:else}
+											Choose file to upload
+										{/if}
+									{/if}
+								</span>
+							</label>
+						</div>
+						
+						<!-- File Upload Status -->
+						{#if selectedFile}
+							<div class="uploaded-file-info">
+								<div class="file-details">
+									<span class="file-name">{selectedFile.name}</span>
+									<span class="file-size">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+								</div>
+								<button type="button" class="remove-file-btn" on:click={removeFile} disabled={isSubmitting}>
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+								</button>
+							</div>
+						{/if}
+						
+						{#if fileUploadError}
+							<div class="file-error-message">
+								{fileUploadError}
+							</div>
+						{/if}
+						
+						<div class="form-help">
+							{#if currentLang === 'ar'}
+								يمكنك إرفاق أي نوع من الملفات (الحد الأقصى 10 ميجابايت)
+							{:else}
+								You can attach any type of file (maximum 10MB)
 							{/if}
 						</div>
 					</div>
@@ -401,6 +535,114 @@
 		font-style: italic;
 	}
 
+	/* File Upload Styles */
+	.file-upload-container {
+		position: relative;
+		margin-bottom: 1rem;
+	}
+
+	.file-input {
+		position: absolute;
+		opacity: 0;
+		width: 0;
+		height: 0;
+		overflow: hidden;
+	}
+
+	.file-upload-label {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75rem;
+		padding: 1.5rem;
+		border: 2px dashed var(--border-color);
+		border-radius: 12px;
+		background: var(--bg-secondary);
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.3s ease;
+		font-weight: 500;
+	}
+
+	.file-upload-label:hover:not(.disabled) {
+		border-color: #3b82f6;
+		background: rgba(59, 130, 246, 0.05);
+		color: #3b82f6;
+	}
+
+	.file-upload-label.disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.uploaded-file-info {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.75rem 1rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
+		margin-bottom: 0.5rem;
+	}
+
+	.file-details {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.file-name {
+		font-weight: 500;
+		color: var(--text-primary);
+		font-size: 0.875rem;
+	}
+
+	.file-size {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+	}
+
+	.remove-file-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border: none;
+		background: #ef4444;
+		color: white;
+		border-radius: 6px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.remove-file-btn:hover:not(:disabled) {
+		background: #dc2626;
+		transform: scale(1.05);
+	}
+
+	.remove-file-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.file-error-message {
+		background: #fef2f2;
+		border: 1px solid #fecaca;
+		color: #dc2626;
+		padding: 0.75rem;
+		border-radius: 8px;
+		margin-bottom: 0.5rem;
+		font-size: 0.875rem;
+	}
+
+	[data-theme="dark"] .file-error-message {
+		background: rgba(220, 38, 38, 0.1);
+		border-color: rgba(220, 38, 38, 0.3);
+		color: #fca5a5;
+	}
+
 	@media (max-width: 768px) {
 		.page-title {
 			font-size: 2rem;
@@ -428,6 +670,22 @@
 
 		.confirmation-title {
 			font-size: 1.5rem;
+		}
+
+		.file-upload-label {
+			padding: 1rem;
+			flex-direction: column;
+			gap: 0.5rem;
+		}
+
+		.uploaded-file-info {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.75rem;
+		}
+
+		.file-details {
+			width: 100%;
 		}
 	}
 </style>

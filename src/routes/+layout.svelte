@@ -129,7 +129,16 @@
 				<!-- Logo -->
 				<a href={isAuthenticated ? (isDriver(user) ? '/driver' : '/dashboard') : '/about'} class="logo" on:click={closeMobileMenu}>
 					<div class="logo-icon">
-						<img src="/patriot-logo.jpg" alt="Patriot Logo" class="logo-img" />
+						<img 
+							src="/patriot-logo.jpg" 
+							alt="Patriot Logo" 
+							class="logo-img"
+							on:error={(e) => {
+								console.error('Failed to load logo image:', e);
+								e.target.style.display = 'none';
+							}}
+							on:load={() => console.log('Logo loaded successfully')}
+						/>
 					</div>
 					<span class="logo-text">Patriot</span>
 				</a>
@@ -394,7 +403,16 @@
 				<div class="footer-section">
 					<div class="footer-logo">
 						<div class="logo-icon">
-							<img src="/patriot-logo.jpg" alt="Patriot Logo" class="logo-img" />
+							<img 
+								src="/patriot-logo.jpg" 
+								alt="Patriot Logo" 
+								class="logo-img"
+								on:error={(e) => {
+									console.error('Failed to load footer logo image:', e);
+									e.target.style.display = 'none';
+								}}
+								on:load={() => console.log('Footer logo loaded successfully')}
+							/>
 						</div>
 						<span class="logo-text">Patriot</span>
 					</div>
@@ -512,6 +530,24 @@
 		height: 100%;
 		object-fit: cover; /* Cover the area, cropping if necessary */
 		border-radius: 8px; /* Match parent border-radius */
+		display: block; /* Ensure image is displayed as block element */
+		max-width: none; /* Override any global max-width constraints */
+	}
+
+	/* Fallback styling if image fails to load */
+	.logo-icon:empty::before,
+	.logo-icon:has(img[style*="display: none"])::before {
+		content: "P";
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(135deg, #3b82f6, #2563eb);
+		color: white;
+		font-weight: bold;
+		font-size: 20px;
+		border-radius: 8px;
 	}
 
 	.logo-text {

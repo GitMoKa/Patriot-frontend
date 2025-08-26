@@ -21,6 +21,10 @@
 		code: ''
 	};
 	
+	// Item details modal
+	let showItemModal = false;
+	let selectedItem = null;
+	
 	// Load order details from API
 	async function loadOrder() {
 		isLoading = true;
@@ -173,6 +177,16 @@
 		errors = {};
 	}
 	
+	function openItemDetails(item) {
+		selectedItem = item;
+		showItemModal = true;
+	}
+	
+	function closeItemModal() {
+		showItemModal = false;
+		selectedItem = null;
+	}
+	
 	onMount(() => {
 		orderId = $page.params.id;
 		loadOrder();
@@ -286,35 +300,40 @@
 				<div class="order-section">
 					<h3>Order Items</h3>
 					{#if orderItems.length > 0}
-						<div class="items-table">
-							<div class="table-header">
-								<span>Item ID</span>
-								<span>Dimensions</span>
-								<span>Status</span>
-								<span>Price</span>
-								<span>Created</span>
-							</div>
+						<div class="items-grid">
 							{#each orderItems as item}
-								<div class="table-row">
-									<span>#{item.id.slice(0, 8)}...</span>
-									<span>{item.width} × {item.height}</span>
-									<span class="status-badge" style="background-color: {getStatusColor(item.status)}20; color: {getStatusColor(item.status)}">
-										{item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-									</span>
-									<span>{formatCurrency(item.price)}</span>
-									<span>{formatDate(item.createdAt)}</span>
+								<div class="item-card" on:click={() => openItemDetails(item)}>
+									<div class="item-card-header">
+										<span class="item-id">#{item.id.slice(0, 8)}...</span>
+										<span class="status-badge" style="background-color: {getStatusColor(item.status)}20; color: {getStatusColor(item.status)}">
+											{item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+										</span>
+									</div>
+									<div class="item-card-content">
+										<div class="item-info">
+											<span class="item-label">Dimensions:</span>
+											<span class="item-value">{item.width} × {item.height}</span>
+										</div>
+										{#if item.price}
+											<div class="item-info">
+												<span class="item-label">Price:</span>
+												<span class="item-value">{formatCurrency(item.price)}</span>
+											</div>
+										{/if}
+									</div>
+									<div class="item-card-footer">
+										<span class="created-date">{formatDate(item.createdAt)}</span>
+										<span class="click-hint">Click for details</span>
+									</div>
 								</div>
 							{/each}
-							{#if order.totalAmount}
-								<div class="table-footer">
-									<span></span>
-									<span></span>
-									<span></span>
-									<span><strong>Total:</strong></span>
-									<span><strong>{formatCurrency(order.totalAmount)}</strong></span>
-								</div>
-							{/if}
 						</div>
+						{#if order.totalAmount}
+							<div class="order-total">
+								<span class="total-label">Total Amount:</span>
+								<span class="total-amount">{formatCurrency(order.totalAmount)}</span>
+							</div>
+						{/if}
 					{:else}
 						<div class="empty-items">
 							<p>No items found for this order.</p>
@@ -384,6 +403,114 @@
 							</button>
 						</div>
 					</form>
+				</div>
+			</div>
+		{/if}
+		
+		{#if showItemModal && selectedItem}
+			<div class="item-modal">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h3>Item Details</h3>
+						<button class="close-btn" on:click={closeItemModal}>×</button>
+					</div>
+					
+					<div class="item-details">
+						<div class="item-detail-section">
+							<h4>Basic Information</h4>
+							<div class="detail-grid">
+								<div class="detail-item">
+									<label>Item ID:</label>
+									<span>#{selectedItem.id}</span>
+								</div>
+								<div class="detail-item">
+									<label>Status:</label>
+									<span class="status-badge" style="background-color: {getStatusColor(selectedItem.status)}20; color: {getStatusColor(selectedItem.status)}">
+										{selectedItem.status.charAt(0).toUpperCase() + selectedItem.status.slice(1)}
+									</span>
+								</div>
+								<div class="detail-item">
+									<label>Dimensions:</label>
+									<span>{selectedItem.width} × {selectedItem.height}</span>
+								</div>
+								{#if selectedItem.price}
+									<div class="detail-item">
+										<label>Price:</label>
+										<span>{formatCurrency(selectedItem.price)}</span>
+									</div>
+								{/if}
+								<div class="detail-item">
+									<label>Created:</label>
+									<span>{formatDate(selectedItem.createdAt)}</span>
+								</div>
+								<div class="detail-item">
+									<label>Updated:</label>
+									<span>{formatDate(selectedItem.updatedAt)}</span>
+								</div>
+							</div>
+						</div>
+						
+						{#if selectedItem.note}
+							<div class="item-detail-section">
+								<h4>Note</h4>
+								<p class="item-note">{selectedItem.note}</p>
+							</div>
+						{/if}
+						
+						{#if selectedItem.material}
+							<div class="item-detail-section">
+								<h4>Material</h4>
+								<div class="material-info">
+									<span>{selectedItem.material.name || 'Unknown Material'}</span>
+								</div>
+							</div>
+						{/if}
+						
+						{#if selectedItem.stagePattern}
+							<div class="item-detail-section">
+								<h4>Stage Pattern</h4>
+								<div class="pattern-card-detail">
+									{#if selectedItem.stagePattern.imageUrl}
+										<img src={selectedItem.stagePattern.imageUrl} alt="Stage Pattern" class="pattern-image" />
+									{/if}
+									<div class="pattern-info">
+										<span class="pattern-title">
+											{selectedItem.stagePattern.title?.en || selectedItem.stagePattern.title?.ar || selectedItem.stagePattern.title || 'Untitled Pattern'}
+										</span>
+									</div>
+								</div>
+							</div>
+						{/if}
+						
+						{#if selectedItem.patternImageUrl}
+							<div class="item-detail-section">
+								<h4>Custom Pattern Image</h4>
+								<div class="custom-pattern">
+									<img src={selectedItem.patternImageUrl} alt="Custom Pattern" class="custom-pattern-image" />
+								</div>
+							</div>
+						{/if}
+						
+						{#if selectedItem.currentStage}
+							<div class="item-detail-section">
+								<h4>Current Stage</h4>
+								<div class="stage-info">
+									<span>{selectedItem.currentStage.name?.en || selectedItem.currentStage.name?.ar || selectedItem.currentStage.name || 'Unknown Stage'}</span>
+									{#if selectedItem.currentStage.description}
+										<p class="stage-description">
+											{selectedItem.currentStage.description?.en || selectedItem.currentStage.description?.ar || selectedItem.currentStage.description}
+										</p>
+									{/if}
+								</div>
+							</div>
+						{/if}
+					</div>
+					
+					<div class="modal-actions">
+						<button type="button" class="btn btn-secondary" on:click={closeItemModal}>
+							Close
+						</button>
+					</div>
 				</div>
 			</div>
 		{/if}
@@ -872,6 +999,277 @@
 		color: var(--text-secondary);
 		margin: 0;
 		font-style: italic;
+	}
+
+	/* Item cards styles */
+	.items-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+		gap: 16px;
+		margin-bottom: 24px;
+	}
+
+	.item-card {
+		background: white;
+		border: 1px solid #e2e8f0;
+		border-radius: 8px;
+		padding: 16px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	}
+
+	.item-card:hover {
+		border-color: #3b82f6;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		transform: translateY(-2px);
+	}
+
+	.item-card-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+
+	.item-id {
+		font-weight: 600;
+		color: #1e293b;
+		font-size: 16px;
+	}
+
+	.item-card-content {
+		margin-bottom: 12px;
+	}
+
+	.item-info {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 8px;
+	}
+
+	.item-label {
+		font-size: 14px;
+		color: #64748b;
+		font-weight: 500;
+	}
+
+	.item-value {
+		font-size: 14px;
+		color: #1e293b;
+		font-weight: 600;
+	}
+
+	.item-card-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: 12px;
+		border-top: 1px solid #f1f5f9;
+	}
+
+	.created-date {
+		font-size: 12px;
+		color: #64748b;
+	}
+
+	.click-hint {
+		font-size: 12px;
+		color: #3b82f6;
+		font-weight: 500;
+	}
+
+	.order-total {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 16px;
+		background: #f8fafc;
+		border: 1px solid #e2e8f0;
+		border-radius: 8px;
+		margin-top: 16px;
+	}
+
+	.total-label {
+		font-size: 16px;
+		font-weight: 600;
+		color: #374151;
+	}
+
+	.total-amount {
+		font-size: 18px;
+		font-weight: 700;
+		color: #059669;
+	}
+
+	/* Item modal styles */
+	.item-modal {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+	}
+
+	.item-modal .modal-content {
+		max-width: 600px;
+		max-height: 80vh;
+		overflow-y: auto;
+	}
+
+	.item-details {
+		margin-bottom: 24px;
+	}
+
+	.item-detail-section {
+		margin-bottom: 24px;
+		padding-bottom: 16px;
+		border-bottom: 1px solid #f1f5f9;
+	}
+
+	.item-detail-section:last-child {
+		border-bottom: none;
+		margin-bottom: 0;
+	}
+
+	.item-detail-section h4 {
+		margin: 0 0 12px 0;
+		font-size: 16px;
+		font-weight: 600;
+		color: #1e293b;
+	}
+
+	.detail-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 12px;
+	}
+
+	.detail-item {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.detail-item label {
+		font-size: 14px;
+		font-weight: 500;
+		color: #64748b;
+	}
+
+	.detail-item span {
+		font-size: 14px;
+		color: #1e293b;
+	}
+
+	.item-note {
+		background: #f8fafc;
+		padding: 12px;
+		border-radius: 6px;
+		border: 1px solid #e2e8f0;
+		margin: 0;
+		color: #374151;
+		font-size: 14px;
+		line-height: 1.5;
+	}
+
+	.material-info {
+		background: #f0f9ff;
+		padding: 12px;
+		border-radius: 6px;
+		border: 1px solid #bae6fd;
+	}
+
+	.pattern-card-detail {
+		display: flex;
+		gap: 12px;
+		align-items: center;
+		background: #f8fafc;
+		padding: 12px;
+		border-radius: 6px;
+		border: 1px solid #e2e8f0;
+	}
+
+	.pattern-image {
+		width: 80px;
+		height: 80px;
+		object-fit: cover;
+		border-radius: 4px;
+		border: 1px solid #d1d5db;
+	}
+
+	.pattern-info {
+		flex: 1;
+	}
+
+	.pattern-title {
+		font-weight: 500;
+		color: #1e293b;
+	}
+
+	.custom-pattern {
+		text-align: center;
+	}
+
+	.custom-pattern-image {
+		max-width: 100%;
+		max-height: 200px;
+		object-fit: contain;
+		border-radius: 6px;
+		border: 1px solid #d1d5db;
+	}
+
+	.stage-info {
+		background: #fef3c7;
+		padding: 12px;
+		border-radius: 6px;
+		border: 1px solid #fcd34d;
+	}
+
+	.stage-description {
+		margin: 8px 0 0 0;
+		font-size: 14px;
+		color: #92400e;
+		line-height: 1.4;
+	}
+
+	@media (max-width: 768px) {
+		.items-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.item-card-header {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 8px;
+		}
+
+		.item-card-footer {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 8px;
+		}
+
+		.order-total {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 8px;
+		}
+
+		.detail-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.pattern-card-detail {
+			flex-direction: column;
+			text-align: center;
+		}
 	}
 </style>
 

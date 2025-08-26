@@ -154,8 +154,13 @@
 					height: Number(item.height),
 					productId: item.productId || undefined, 
 					materialId: item.materialId || undefined, 
+					categoryId: item.categoryId || undefined,
 					currentStage: item.currentStage, 
-					currentStageId: item.currentStageId 
+					currentStageId: item.currentStageId,
+					stageIds: item.stageIds || undefined,
+					stagePatternId: item.stagePatternId || undefined,
+					patternImageUrl: item.patternImageUrl || undefined,
+					note: item.note || undefined
 				}))
 			};
 

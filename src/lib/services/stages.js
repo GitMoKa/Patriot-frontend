@@ -30,6 +30,26 @@ export class StagesService {
 			throw new Error('Failed to fetch stage: ' + error.message);
 		}
 	}
+
+	// Get stage patterns
+	async getStagePatterns() {
+		try {
+			const response = await apiService.get('/stage-patterns');
+			
+			// Handle API response structure
+			if (response.results && Array.isArray(response.results)) {
+				return {
+					results: response.results,
+					patterns: response.results
+				};
+			}
+			
+			// Fallback for different response structures
+			return Array.isArray(response) ? response : [];
+		} catch (error) {
+			throw new Error('Failed to fetch stage patterns: ' + error.message);
+		}
+	}
 }
 
 export const stagesService = new StagesService();
