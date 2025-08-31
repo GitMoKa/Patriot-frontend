@@ -30,6 +30,7 @@
 		height: 1
 	};
 	let productAdditionalStages = []; // For special product stage selection
+	let selectedMaterialId = null; // For special product material selection
 	let itemNote = ''; // Optional note for the order item
 	let customItem = {
 		width: 1,
@@ -86,6 +87,11 @@
 			categories = categoriesResponse.results || categoriesResponse.categories || categoriesResponse;
 			materials = materialsResponse.results || materialsResponse.materials || materialsResponse;
 			stages = stagesResponse.results || stagesResponse.stages || stagesResponse;
+			
+			// Debug logging
+			console.log('Materials response:', materialsResponse);
+			console.log('Extracted materials:', materials);
+			console.log('Materials length:', materials?.length);
 		} catch (err) {
 			error = 'Failed to load data: ' + err.message;
 		} finally {
@@ -106,17 +112,17 @@
 			if (selectedCategory === 'all-products') {
 				// Load all products in the system
 				const allProductsResponse = await productsService.getAllProducts();
-				products = allProductsResponse.products || allProductsResponse.result || allProductsResponse || [];
+				products = allProductsResponse.products || allProductsResponse.results || allProductsResponse || [];
 			} else if (selectedCategory === 'no-category') {
-				// Load products with null category
-				const productsData = await productsService.getProductsByCategory(null);
-				products = Array.isArray(productsData) ? productsData : [];
+				// Load products with null category - use special parameter for no category
+				const productsResponse = await productsService.getProductsByCategory('no-category');
+				products = productsResponse.products || productsResponse.results || [];
 			} else {
-				// Get the localized category name
-				const categoryName = getLocalizedName(selectedCategory);
-				if (categoryName) {
-					const productsData = await productsService.getProductsByCategory(categoryName);
-					products = Array.isArray(productsData) ? productsData : [];
+				// Use category ID for filtering
+				const categoryId = selectedCategory.id;
+				if (categoryId) {
+					const productsResponse = await productsService.getProductsByCategory(categoryId);
+					products = productsResponse.products || productsResponse.results || [];
 				}
 			}
 		} catch (err) {
@@ -130,8 +136,8 @@
 		let numValue = parseInt(value);
 		if (isNaN(numValue) || numValue < 1) {
 			numValue = 1;
-		} else if (numValue > 250) {
-			numValue = 250;
+		} else if (numValue > 350) {
+			numValue = 350;
 		}
 		customItem[field] = numValue;
 	}
@@ -156,13 +162,27 @@
 	}
 
 	// Check if current product is the special product that needs stage selection
-	$: isSpecialProduct = selectedProduct?.id === "65f5d608-ccf0-4db4-b114-6707a6ba9049";
+	$: isSpecialProduct = selectedProduct?.id === "f505f98a-c68f-48ae-a49a-72bc66986745";
 	
-	// Check if the special painting stage is selected
-	$: hasSpecialPaintingStage = productAdditionalStages.some(stage => stage.id === "277e2b35-8167-41c8-93fd-867fdf202304");
+	// Check if the product has the special painting stages (either in product's default stages or user-selected additional stages)
+	$: hasSpecialPaintingStage = (() => {
+		const paintingStageIds = ["7c07ca35-9441-42fc-b416-810568d69ca3", "f6dad32d-d844-4120-8e29-779b19cab163"];
+		
+		// Check if any painting stage is in the product's default stages
+		const productHasPaintingStage = selectedProduct?.stages?.some(stage => 
+			paintingStageIds.includes(stage.id)
+		) || false;
+		
+		// Check if any painting stage is in user-selected additional stages
+		const userSelectedPaintingStage = productAdditionalStages.some(stage => 
+			paintingStageIds.includes(stage.id)
+		);
+		
+		return productHasPaintingStage || userSelectedPaintingStage;
+	})();
 	
-	// Show painting step only if both conditions are met: special product AND painting stage selected
-	$: showPaintingStep = isSpecialProduct && hasSpecialPaintingStage;
+	// Show painting step if the product has any of the special painting stages
+	$: showPaintingStep = hasSpecialPaintingStage;
 
 	// Get available stages for the special product (exclude stages the product already has)
 	$: availableStagesForProduct = isSpecialProduct 
@@ -209,17 +229,66 @@
 			console.log('Stage patterns response:', patternsResponse);
 			
 			// Handle different response structures
+			let allPatterns = [];
 			if (patternsResponse.results && Array.isArray(patternsResponse.results)) {
-				stagePatterns = patternsResponse.results;
+				allPatterns = patternsResponse.results;
 			} else if (patternsResponse.patterns && Array.isArray(patternsResponse.patterns)) {
-				stagePatterns = patternsResponse.patterns;
+				allPatterns = patternsResponse.patterns;
 			} else if (Array.isArray(patternsResponse)) {
-				stagePatterns = patternsResponse;
-			} else {
-				stagePatterns = [];
+				allPatterns = patternsResponse;
 			}
 			
-			console.log('Processed stage patterns:', stagePatterns);
+			// Filter patterns to show only those connected to painting stages that the product has
+			const paintingStageIds = ["7c07ca35-9441-42fc-b416-810568d69ca3", "f6dad32d-d844-4120-8e29-779b19cab163"];
+			
+			// Get the painting stage IDs that this product actually has (either default or user-selected)
+			const productPaintingStageIds = [];
+			
+			// Check product's default stages
+			if (selectedProduct?.stages) {
+				selectedProduct.stages.forEach(stage => {
+					if (paintingStageIds.includes(stage.id)) {
+						productPaintingStageIds.push(stage.id);
+					}
+				});
+			}
+			
+			// Check user-selected additional stages
+			productAdditionalStages.forEach(stage => {
+				if (paintingStageIds.includes(stage.id)) {
+					productPaintingStageIds.push(stage.id);
+				}
+			});
+			
+			// Remove duplicates
+			const uniqueProductPaintingStageIds = [...new Set(productPaintingStageIds)];
+			
+			// Filter stage patterns to show only those connected to the product's painting stages
+			console.log('=== STAGE PATTERN FILTERING DEBUG ===');
+			console.log('All patterns loaded:', allPatterns);
+			console.log('All patterns count:', allPatterns.length);
+			console.log('Product painting stage IDs:', uniqueProductPaintingStageIds);
+			
+			// Debug each pattern
+			allPatterns.forEach((pattern, index) => {
+				console.log(`Pattern ${index}:`, {
+					id: pattern.id,
+					title: pattern.title,
+					stageId: pattern.stage?.id,
+					stageName: pattern.stage?.name,
+					matchesFilter: pattern.stage && uniqueProductPaintingStageIds.includes(pattern.stage.id)
+				});
+			});
+			
+			stagePatterns = allPatterns.filter(pattern => {
+				const hasStage = pattern.stage && uniqueProductPaintingStageIds.includes(pattern.stage.id);
+				console.log(`Pattern ${pattern.id} - has matching stage: ${hasStage}`);
+				return hasStage;
+			});
+			
+			console.log('Filtered stage patterns:', stagePatterns);
+			console.log('Filtered patterns count:', stagePatterns.length);
+			console.log('=== END STAGE PATTERN FILTERING DEBUG ===');
 		} catch (err) {
 			error = 'Failed to load stage patterns: ' + err.message;
 			console.error('Stage patterns error:', err);
@@ -231,10 +300,10 @@
 	function handleConfirmProduct() {
 		// Add product with modified dimensions to order
 		const productItem = {
-			width: productDimensions.width,
-			height: productDimensions.height,
+			width: Number(productDimensions.width)+2,
+			height: Number(productDimensions.height)+2,
 			productId: selectedProduct.id,
-			stageIds:[]
+			stageIds: []
 		};
 
 		// Add optional category if selected (and not 'no-category')
@@ -247,24 +316,62 @@
 			productItem.note = itemNote.trim();
 		}
 
-		// Add additional stages for special product
-		if (isSpecialProduct && productAdditionalStages.length > 0) {
-			productItem.stageIds = productAdditionalStages.map(stage => stage.id);
+		// For special product, combine product's existing stages with user-selected additional stages
+		if (isSpecialProduct) {
+			const productStageIds = [];
+			
+			// Add product's existing/default stages
+			if (selectedProduct.stages && Array.isArray(selectedProduct.stages)) {
+				productStageIds.push(...selectedProduct.stages.map(stage => stage.id));
+			}
+			
+			// Add user-selected additional stages
+			if (productAdditionalStages.length > 0) {
+				productStageIds.push(...productAdditionalStages.map(stage => stage.id));
+			}
+			
+			// Remove duplicates and assign to productItem
+			productItem.stageIds = [...new Set(productStageIds)];
+		}
+
+		// Add material for special product if selected
+		if (isSpecialProduct && selectedMaterialId) {
+			productItem.materialId = selectedMaterialId;
 		}
 
 		// Add painting data if user completed painting step
 		if (hasPaintingData) {
+			// Handle stage pattern data
 			if (selectedStagePattern) {
-				productItem.stagePatternId = selectedStagePattern.id;
+				// Ensure stagePatternId is a string
+				const stagePatternId = String(selectedStagePattern.id);
+				productItem.stagePatternId = stagePatternId;
+				//productItem.patternImageUrl = selectedStagePattern.imageUrl;
+				console.log('Adding selected stage pattern:', {
+					stagePatternId: stagePatternId,
+					stagePatternIdType: typeof stagePatternId,
+					patternImageUrl: selectedStagePattern.imageUrl,
+					originalSelectedStagePattern: selectedStagePattern
+				});
 			} else if (uploadedPatternImageUrl) {
+				// Use uploaded custom pattern if no stage pattern selected
+				productItem.stagePatternId = null;
 				productItem.patternImageUrl = uploadedPatternImageUrl;
+				console.log('Adding uploaded pattern:', uploadedPatternImageUrl);
+			} else {
+				// No pattern selected
+				productItem.stagePatternId = null;
+				productItem.patternImageUrl = null;
+				console.warn('No stage pattern or uploaded pattern selected');
 			}
 		}
 
 		console.log('Sending product item to server:', productItem);
-		console.log('productItem stages :', productItem.stageIds);
+		console.log('Product default stages:', selectedProduct.stages?.map(s => s.id) || []);
+		console.log('User selected additional stages:', productAdditionalStages.map(s => s.id));
+		console.log('Combined productItem stages:', productItem.stageIds);
 		dispatch('addItem', productItem);
-		closeModal();
+		resetModalAfterSuccess();
 	}
 
 	async function handleImageUpload(event) {
@@ -301,7 +408,9 @@
 	}
 
 	function selectStagePattern(pattern) {
+		console.log('Selecting stage pattern:', pattern);
 		selectedStagePattern = pattern;
+		console.log('selectedStagePattern is now:', selectedStagePattern);
 		// Clear uploaded image since we're using a pattern
 		uploadedPatternImageUrl = '';
 		uploadedPatternImage = null;
@@ -340,8 +449,8 @@
 
 		// Add custom item to order
 		const newCustomItem = {
-			width: customItem.width,
-			height: customItem.height,
+			width: customItem.width+2,
+			height: customItem.height+2,
 			stageIds: customItem.selectedStages.map(stage => stage.id)
 		};
 
@@ -357,7 +466,7 @@
 
 		console.log('Sending custom item to server:', newCustomItem);
 		dispatch('addItem', newCustomItem);
-		closeModal();
+		resetModalAfterSuccess();
 	}
 
 	function closeModal() {
@@ -374,6 +483,7 @@
 			height: 1
 		};
 		productAdditionalStages = [];
+		selectedMaterialId = null;
 		itemNote = '';
 		customItem = {
 			width: 1,
@@ -392,6 +502,13 @@
 		stagePatterns = [];
 		
 		dispatch('close');
+	}
+	
+	function resetModalAfterSuccess() {
+		// This function is called after successfully adding an item
+		// It's separate from closeModal to ensure data isn't cleared prematurely
+		console.log('Resetting modal after successful item addition');
+		closeModal();
 	}
 
 	function toggleStage(stage) {
@@ -451,6 +568,14 @@
 								<option value={product}>{getLocalizedName(product)}</option>
 							{/each}
 						</select>
+						{#if selectedProduct}
+							<div class="selected-product-display">
+								<strong>Selected:</strong> {getLocalizedName(selectedProduct)}
+								{#if selectedProduct.description}
+									<br><small>{selectedProduct.description}</small>
+								{/if}
+							</div>
+						{/if}
 					</div>
 
 					<div class="modal-actions">
@@ -478,7 +603,7 @@
 								bind:value={productDimensions.width}
 								on:input={(e) => validateProductDimension(e.target.value, 'width')}
 								min="1" 
-								max="250" 
+								max="350" 
 								required
 							>
 						</div>
@@ -490,7 +615,7 @@
 								bind:value={productDimensions.height}
 								on:input={(e) => validateProductDimension(e.target.value, 'height')}
 								min="1" 
-								max="250" 
+								max="350" 
 								required
 							>
 						</div>
@@ -522,6 +647,27 @@
 								</div>
 							{:else}
 								<p class="no-stages-text">No additional stages available for this product.</p>
+							{/if}
+						</div>
+
+						<div class="form-group">
+							<label for="material">Material (Optional)</label>
+							<select id="material" bind:value={selectedMaterialId}>
+								<option value="">No Material</option>
+								{#each materials as material}
+									<option value={material.id}>
+										{getLocalizedName(material)}
+										{#if material.description && getLocalizedName({name: material.description})}
+											- {getLocalizedName({name: material.description})}
+										{/if}
+									</option>
+								{/each}
+							</select>
+							<!-- Debug info -->
+							{#if materials.length === 0}
+								<p style="color: red; font-size: 0.8rem;">Debug: No materials loaded (length: {materials.length})</p>
+							{:else}
+								<p style="color: green; font-size: 0.8rem;">Debug: {materials.length} materials loaded</p>
 							{/if}
 						</div>
 					{/if}
@@ -562,6 +708,7 @@
 								bind:checked={useCustomPattern}
 								on:change={() => {
 									// Reset selections when toggling
+									console.log('Toggling custom pattern, clearing selections');
 									selectedStagePattern = null;
 									uploadedPatternImageUrl = '';
 									uploadedPatternImage = null;
@@ -569,6 +716,9 @@
 							>
 							Use custom pattern (upload image)
 						</label>
+						<div class="debug-info">
+							<small>Debug: selectedStagePattern = {selectedStagePattern ? selectedStagePattern.id : 'null'}</small>
+						</div>
 					</div>
 
 					{#if !useCustomPattern}
@@ -583,11 +733,15 @@
 										<div 
 											class="pattern-card {selectedStagePattern?.id === pattern.id ? 'selected' : ''}"
 											on:click={() => selectStagePattern(pattern)}
+											on:keydown={(e) => e.key === 'Enter' && selectStagePattern(pattern)}
+											role="button"
+											tabindex="0"
 										>
 											{#if pattern.imageUrl}
 												<img src={pattern.imageUrl} alt={getLocalizedName({name: pattern.title}) || pattern.title?.en || pattern.title?.ar || 'Pattern'} />
 											{/if}
 											<div class="pattern-title">{getLocalizedName({name: pattern.title}) || pattern.title?.en || pattern.title?.ar || 'Untitled Pattern'}</div>
+											<div class="pattern-debug">ID: {pattern.id}</div>
 										</div>
 									{/each}
 								</div>
@@ -1175,5 +1329,43 @@
 	input[type="file"]:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
+	}
+
+	.selected-product-display {
+		margin-top: 0.5rem;
+		padding: 0.75rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: 6px;
+		color: var(--text-primary);
+		font-size: 0.875rem;
+	}
+
+	.selected-product-display strong {
+		color: #3b82f6;
+	}
+
+	.selected-product-display small {
+		color: var(--text-secondary);
+		font-style: italic;
+	}
+
+	.pattern-debug {
+		font-size: 0.75rem;
+		color: #666;
+		margin-top: 0.25rem;
+		font-family: monospace;
+	}
+
+	.debug-info {
+		margin-top: 0.5rem;
+		padding: 0.5rem;
+		background: #f0f0f0;
+		border-radius: 4px;
+		font-family: monospace;
+	}
+
+	.debug-info small {
+		color: #666;
 	}
 </style>

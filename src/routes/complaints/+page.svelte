@@ -16,9 +16,20 @@
 	
 	// Form state
 	let description = '';
+	let complaintType = '';
 	let isSubmitting = false;
 	let error = null;
 	let showConfirmation = false;
+	
+	// Complaint type options
+	const complaintTypes = [
+		{ value: 'maintenance', labelEn: 'Maintenance', labelAr: 'صيانة' },
+		{ value: 'noise', labelEn: 'Noise', labelAr: 'ضوضاء' },
+		{ value: 'cleanliness', labelEn: 'Cleanliness', labelAr: 'نظافة' },
+		{ value: 'staffBehavior', labelEn: 'Staff Behavior', labelAr: 'سلوك الموظفين' },
+		{ value: 'technicalIssue', labelEn: 'Technical Issue', labelAr: 'مشكلة تقنية' },
+		{ value: 'other', labelEn: 'Other', labelAr: 'أخرى' }
+	];
 	
 	// File upload state
 	let selectedFile = null;
@@ -27,7 +38,7 @@
 	let fileUploadError = '';
 	
 	// Form validation
-	$: isFormValid = description.trim().length > 0;
+	$: isFormValid = description.trim().length > 0 && complaintType.trim().length > 0;
 	
 	async function handleSubmit() {
 		if (!isFormValid || isSubmitting) return;
@@ -52,7 +63,9 @@
 		try {
 			const complaintData = {
 				description: description.trim(),
-				userId: userId
+				userId: userId,
+				location:"",
+				complaintType: complaintType
 			};
 			
 			// Add file URL if uploaded
@@ -200,6 +213,37 @@
 				</header>
 
 				<form class="complaint-form" on:submit|preventDefault={handleSubmit}>
+					<!-- Complaint Type Field -->
+					<div class="form-group">
+						<label for="complaintType" class="form-label">
+							{#if currentLang === 'ar'}
+								نوع الشكوى *
+							{:else}
+								Complaint Type *
+							{/if}
+						</label>
+						<select
+							id="complaintType"
+							bind:value={complaintType}
+							class="form-select"
+							required
+							disabled={isSubmitting}
+						>
+							<option value="">
+								{#if currentLang === 'ar'}
+									اختر نوع الشكوى
+								{:else}
+									Select complaint type
+								{/if}
+							</option>
+							{#each complaintTypes as type}
+								<option value={type.value}>
+									{currentLang === 'ar' ? type.labelAr : type.labelEn}
+								</option>
+							{/each}
+						</select>
+					</div>
+
 					<!-- Description Field -->
 					<div class="form-group">
 						<label for="description" class="form-label">
@@ -409,6 +453,29 @@
 		font-weight: 600;
 		color: var(--text-color);
 		font-size: 0.9rem;
+	}
+
+	.form-select {
+		padding: 1rem;
+		border: 2px solid var(--border-color);
+		border-radius: 8px;
+		font-size: 1rem;
+		font-family: inherit;
+		background: var(--input-bg);
+		color: var(--text-color);
+		transition: border-color 0.3s ease;
+		cursor: pointer;
+	}
+
+	.form-select:focus {
+		outline: none;
+		border-color: var(--primary-color);
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+	}
+
+	.form-select:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.form-textarea {

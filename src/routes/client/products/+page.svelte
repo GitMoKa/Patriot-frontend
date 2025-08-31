@@ -7,19 +7,27 @@
 	import { apiService } from '$lib/services/api.js';
 	import { reviewsService } from '$lib/services/reviews.js';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import ReviewModal from '$lib/components/ReviewModal.svelte';
 	import ReviewsList from '$lib/components/ReviewsList.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let categories = [];
 	let products = [];
 	let filteredProducts = [];
 	let selectedCategory = null;
-	let selectedCategoryName = 'All Categories'; // Track selected category for filtering
+	let selectedCategoryId = 'All Categories'; // Track selected category for filtering
 	let sortBy = 'name'; // 'name', 'rating'
 	let isLoading = true;
 	let error = null;
 	let viewMode = 'both'; // Show both categories and products
 	let showSortDropdown = false; // Control sort dropdown visibility
+	
+	// Pagination state
+	let currentPage = 0; // 0-based for API
+	let totalPages = 1;
+	let totalItems = 0;
+	let itemsPerPage = 12; // Good number for product grid
 	
 	// Product popup state
 	let showProductPopup = false;
@@ -48,19 +56,20 @@
 	$: {
 		let filtered = [...products];
 		
-		// Filter by category based on selectedCategoryName
-		if (selectedCategoryName === 'No Category') {
+		// Filter out specific product ID
+		filtered = filtered.filter(product => product.id !== 'f505f98a-c68f-48ae-a49a-72bc66986745');
+		
+		// Filter by category based on selectedCategoryId
+		if (selectedCategoryId === 'No Category') {
 			// Filter products with no category
 			filtered = filtered.filter(product => {
 				return !product.category || product.category === null || product.category === undefined;
 			});
-		} else if (selectedCategoryName !== 'All Categories') {
-			// Filter by specific category
+		} else if (selectedCategoryId !== 'All Categories') {
+			// Filter by specific category ID
 			filtered = filtered.filter(product => {
-				const productCategory = typeof product.category === 'string' 
-					? product.category 
-					: getLocalizedText(product.category?.name);
-				return productCategory === selectedCategoryName;
+				const productCategoryId = product.category?.id;
+				return productCategoryId === selectedCategoryId;
 			});
 		}
 		// If 'All Categories' is selected, show all products (no filtering)
@@ -94,8 +103,11 @@
 
 	async function loadProducts() {
 		try {
-			const response = await productsService.getAllProducts();
+			const response = await productsService.getAllProducts(currentPage, itemsPerPage);
 			products = response.results || response.products || [];
+			totalItems = response.total || 0;
+			// Calculate total pages based on total items and items per page
+			totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 		} catch (err) {
 			console.error('Failed to load products:', err);
 			throw err;
@@ -142,6 +154,32 @@
 		favoriteMessage = ''; // Clear any previous favorite message
 		await checkIfProductInFavorites(product.id); // Check if product is in favorites
 		loadProductReviews(product.id); // Load reviews when popup opens
+	}
+	
+	// Function to open product popup by ID (for notifications)
+	async function openProductPopupById(productId) {
+		try {
+			// First try to find the product in the current products list
+			let product = products.find(p => p.id === productId);
+			
+			// If not found in current list, fetch the specific product
+			if (!product) {
+				const response = await productsService.getProductById(productId);
+				product = response;
+			}
+			
+			if (product) {
+				await handleProductClick(product);
+				// Remove the productId parameter from URL after opening popup
+				const url = new URL($page.url);
+				url.searchParams.delete('productId');
+				goto(url.toString(), { replaceState: true });
+			} else {
+				console.warn('Product not found:', productId);
+			}
+		} catch (error) {
+			console.error('Failed to load product for popup:', error);
+		}
 	}
 
 	function closeProductPopup() {
@@ -244,19 +282,56 @@
 
 
 	// New function to handle category selection from the horizontal scroll
-	async function selectCategoryFilter(categoryName) {
-		selectedCategoryName = categoryName;
+	async function selectCategoryFilter(categoryId) {
+		selectedCategoryId = categoryId;
+		currentPage = 0; // Reset to first page when category changes
+		
+		// Update URL with new category and reset page
+		const url = new URL($page.url);
+		url.searchParams.set('page', '0');
+		if (categoryId !== 'All Categories') {
+			url.searchParams.set('category', categoryId);
+		} else {
+			url.searchParams.delete('category');
+		}
+		goto(url.toString(), { replaceState: true });
 		
 		// If a specific category is selected, load products for that category
-		if (categoryName !== 'All Categories' && categoryName !== 'No Category') {
+		if (categoryId !== 'All Categories' && categoryId !== 'No Category') {
 			try {
-				const categoryProducts = await productsService.getProductsByCategory(categoryName);
+				const response = await productsService.getProductsByCategory(categoryId, currentPage, itemsPerPage);
+				products = response.results || response.products || [];
+				totalItems = response.total || 0;
+				// Calculate total pages based on total items and items per page
+				totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 				// Update the filtered products directly for better performance
-				filteredProducts = categoryProducts || [];
+				filteredProducts = products;
 			} catch (err) {
 				console.error('Failed to load products for category:', err);
-				// Fallback to client-side filtering
+				// Fallback to loading all products
+				await loadProducts();
 			}
+		} else {
+			// Load all products
+			await loadProducts();
+		}
+	}
+	
+	function handlePageChange(event) {
+		const newPage = event.detail.page;
+		currentPage = newPage;
+		
+		// Update URL with new page parameter
+		const url = new URL($page.url);
+		url.searchParams.set('page', newPage.toString());
+		url.searchParams.set('limit', itemsPerPage.toString());
+		goto(url.toString(), { replaceState: true });
+		
+		// Load products for current category and page
+		if (selectedCategoryId !== 'All Categories' && selectedCategoryId !== 'No Category') {
+			selectCategoryFilter(selectedCategoryId);
+		} else {
+			loadProducts();
 		}
 	}
 
@@ -276,8 +351,38 @@
 		}
 	}
 
-	onMount(() => {
-		loadData();
+	// Get URL parameters on mount and when they change
+	$: if ($page.url.searchParams.has('page')) {
+		const urlPage = parseInt($page.url.searchParams.get('page') || '0');
+		if (urlPage !== currentPage) {
+			currentPage = urlPage;
+		}
+	}
+	
+	$: if ($page.url.searchParams.has('category')) {
+		const urlCategory = $page.url.searchParams.get('category') || 'All Categories';
+		if (urlCategory !== selectedCategoryId) {
+			selectedCategoryId = urlCategory;
+		}
+	}
+	
+	// Handle productId URL parameter for opening product popup (from notifications)
+	$: if ($page.url.searchParams.has('productId')) {
+		const productId = $page.url.searchParams.get('productId');
+		if (productId && products.length > 0) {
+			openProductPopupById(productId);
+		}
+	}
+
+	onMount(async () => {
+		await loadData();
+		
+		// Check if there's a productId in URL parameters after loading data
+		const productId = $page.url.searchParams.get('productId');
+		if (productId) {
+			await openProductPopupById(productId);
+		}
+		
 		// Add click outside listener
 		document.addEventListener('click', handleClickOutside);
 		return () => {
@@ -350,7 +455,7 @@
 					<!-- All Categories Button -->
 					<button 
 						class="category-filter-btn" 
-						class:active={selectedCategoryName === 'All Categories'}
+						class:active={selectedCategoryId === 'All Categories'}
 						on:click={() => selectCategoryFilter('All Categories')}
 					>
 						{#if currentLang === 'ar'}
@@ -363,7 +468,7 @@
 					<!-- No Category Button -->
 					<button 
 						class="category-filter-btn" 
-						class:active={selectedCategoryName === 'No Category'}
+						class:active={selectedCategoryId === 'No Category'}
 						on:click={() => selectCategoryFilter('No Category')}
 					>
 						{#if currentLang === 'ar'}
@@ -377,8 +482,8 @@
 					{#each categories as category}
 						<button 
 							class="category-filter-btn" 
-							class:active={selectedCategoryName === getLocalizedText(category.name)}
-							on:click={() => selectCategoryFilter(getLocalizedText(category.name))}
+							class:active={selectedCategoryId === category.id}
+							on:click={() => selectCategoryFilter(category.id)}
 						>
 							{getLocalizedText(category.name)}
 						</button>
@@ -552,6 +657,15 @@
 						</p>
 					</div>
 				{/if}
+				
+				<!-- Pagination Component -->
+				<Pagination 
+					{currentPage}
+					{totalPages}
+					{totalItems}
+					{itemsPerPage}
+					on:pageChange={handlePageChange}
+				/>
 			</div>
 		{/if}
 

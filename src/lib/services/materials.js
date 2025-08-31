@@ -6,10 +6,19 @@ export class MaterialsService {
 		try {
 			const response = await apiService.get('/materials');
 			
-			// Handle API response structure similar to products
-			if (response.result && Array.isArray(response.result)) {
+			// Handle API response structure: { results: Material[], total: number }
+			if (response.results && Array.isArray(response.results)) {
 				return {
 					results: response.results,
+					materials: response.results,
+					total: response.total
+				};
+			}
+			
+			// Handle legacy structure with 'result' property
+			if (response.result && Array.isArray(response.result)) {
+				return {
+					results: response.result,
 					materials: response.result
 				};
 			}

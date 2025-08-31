@@ -59,7 +59,7 @@
 				password: formData.password
 			});
 			
-			// If tokens are returned, store them and proceed to step 2
+			// If tokens are returned, store them and proceed to step 2 (address)
 			if (response.accessToken && response.refreshToken) {
 				// Tokens are already stored by authService.register()
 				goto('/client/signup/step2');
@@ -112,6 +112,8 @@
 				<div class="step active">1</div>
 				<div class="step-line"></div>
 				<div class="step">2</div>
+				<div class="step-line"></div>
+				<div class="step">3</div>
 			</div>
 			
 			<!-- Title -->

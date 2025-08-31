@@ -2,15 +2,23 @@
 	import { onMount } from 'svelte';
 	import { languageStore } from '$lib/stores/language.js';
 	import { authStore } from '$lib/stores/auth.js';
-	import { apiService } from '$lib/services/api.js';
+	import { favoritesService } from '$lib/services/favorites.js';
 	import { reviewsService } from '$lib/services/reviews.js';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import ReviewModal from '$lib/components/ReviewModal.svelte';
 	import ReviewsList from '$lib/components/ReviewsList.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let favoriteProducts = [];
 	let isLoading = true;
 	let error = null;
+	
+	// Pagination state
+	let currentPage = 0; // 0-based for API
+	let totalPages = 1;
+	let totalItems = 0;
+	let itemsPerPage = 12;
 	
 	// Product popup state
 	let showProductPopup = false;
@@ -38,14 +46,29 @@
 		isLoading = true;
 		error = null;
 		try {
-			const response = await apiService.get('/favorites');
-			favoriteProducts = response.results || [];
+			const response = await favoritesService.getAllFavorites(currentPage, itemsPerPage);
+			favoriteProducts = response.favorites || response.results || [];
+			totalPages = response.totalPages || 1;
+			totalItems = response.total || 0;
 		} catch (err) {
 			console.error('Failed to load favorite products:', err);
 			error = 'Failed to load favorite products. Please try again.';
 		} finally {
 			isLoading = false;
 		}
+	}
+	
+	function handlePageChange(event) {
+		const newPage = event.detail.page;
+		currentPage = newPage;
+		
+		// Update URL with new page parameter
+		const url = new URL($page.url);
+		url.searchParams.set('page', newPage.toString());
+		url.searchParams.set('limit', itemsPerPage.toString());
+		goto(url.toString(), { replaceState: true });
+		
+		loadFavoriteProducts();
 	}
 
 	function handleProductClick(favoriteItem) {
@@ -131,7 +154,7 @@
 		favoriteMessage = '';
 
 		try {
-			await apiService.delete(`/favorites/${productId}`);
+			await favoritesService.removeFromFavorites(productId);
 			
 			favoriteMessage = currentLang === 'ar' ? 'تم إزالة المنتج من المفضلة' : 'Product removed from favorites';
 			
@@ -148,6 +171,15 @@
 
 	function goToProductsPage() {
 		goto('/client/products');
+	}
+
+	// Get URL parameters on mount and when they change
+	$: if ($page.url.searchParams.has('page')) {
+		const urlPage = parseInt($page.url.searchParams.get('page') || '0');
+		if (urlPage !== currentPage) {
+			currentPage = urlPage;
+			loadFavoriteProducts();
+		}
 	}
 
 	onMount(() => {
@@ -342,6 +374,15 @@
 						</button>
 					</div>
 				{/if}
+				
+				<!-- Pagination Component -->
+				<Pagination 
+					{currentPage}
+					{totalPages}
+					{totalItems}
+					{itemsPerPage}
+					on:pageChange={handlePageChange}
+				/>
 			</div>
 		{/if}
 	</div>

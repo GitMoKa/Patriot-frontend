@@ -24,8 +24,8 @@ export class OrdersService {
 		}
 	}
 
-	// Get all orders
-	async getAllOrders() {
+	// Get all orders with pagination support
+	async getAllOrders(page = 0, limit = 10) {
 		try {
 			// Check authentication first
 			let userId = null;
@@ -39,8 +39,14 @@ export class OrdersService {
 				throw new Error('401 Not Authorized: User not logged in.');
 			}
 
-			// Make authenticated API call
-			const response = await apiService.get('/orders');
+			// Build query parameters for pagination
+			const queryParams = new URLSearchParams({
+				limit: limit.toString(),
+				page: page.toString()
+			});
+
+			// Make authenticated API call with pagination
+			const response = await apiService.get(`/orders?${queryParams}`);
 
 			// Handle API response structure: { results: Order[], total: number }
 			let orders = [];
@@ -56,7 +62,10 @@ export class OrdersService {
 			return {
 				total: response.total || userOrders.length,
 				results: response.results || userOrders,
-				orders: userOrders
+				orders: userOrders,
+				page: page,
+				limit: limit,
+				totalPages: Math.ceil((response.total || userOrders.length) / limit)
 			};
 		} catch (error) {
 			throw new Error('Failed to fetch orders: ' + error.message);

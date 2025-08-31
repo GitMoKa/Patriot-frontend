@@ -61,24 +61,36 @@
 		return item.name[currentLang] || item.name.en || item.name.ar || '';
 	}
 	
+	// Track previous state to detect actual changes
+	let previousStateId = null;
+	
 	// Load cities when state changes
 	$: if (selectedState) {
-		loadCitiesForState(selectedState.id);
-		selectedCity = null; // Reset city selection when state changes
 		orderData.address.stateId = selectedState.id;
 		orderData.address.state = selectedState;
+		
+		// Only load cities and reset selection if state actually changed
+		if (previousStateId !== selectedState.id) {
+			console.log('State changed from', previousStateId, 'to', selectedState.id);
+			previousStateId = selectedState.id;
+			selectedCity = null; // Reset city only when state changes
+			loadCitiesForState(selectedState.id);
+		}
 	} else {
 		cities = [];
 		selectedCity = null;
 		orderData.address.stateId = null;
 		orderData.address.state = null;
+		previousStateId = null;
 	}
 	
 	// Update city in orderData when selectedCity changes
 	$: if (selectedCity) {
+		console.log('City selected:', selectedCity.name,selectedCity.id, selectedCity);
 		orderData.address.cityId = selectedCity.id;
 		orderData.address.city = selectedCity;
-	} else {
+	} else if (selectedCity === null) {
+		console.log('City cleared/reset');
 		orderData.address.cityId = null;
 		orderData.address.city = null;
 	}
@@ -94,8 +106,10 @@
 	
 	async function loadCitiesForState(stateId) {
 		try {
+			console.log('Loading cities for state:', stateId);
 			const citiesData = await citiesService.getCitiesByState(stateId);
 			cities = Array.isArray(citiesData) ? citiesData : [];
+			console.log('Cities loaded:', cities.length);
 		} catch (err) {
 			console.error('Failed to load cities:', err);
 			cities = [];
@@ -125,6 +139,9 @@
 				if (!selectedState) {
 					addressErrors.state = 'State is required when providing address information';
 				}
+				if (!addressFields.selectedCity?.trim()) {
+					addressErrors.selectedCity = 'City is required when providing address information';
+				}
 				if (!addressFields.street1?.trim()) {
 					addressErrors.street1 = 'Street address is required when providing address information';
 				}
@@ -134,10 +151,10 @@
 			}
 
 			// If there are address errors, don't submit
-			if (Object.keys(addressErrors).length > 0) {
-				error = 'Please fix the address errors below.';
-				return;
-			}
+			// if (Object.keys(addressErrors).length > 0) {
+			// 	error = 'Please fix the address errors below.';
+			// 	return;
+			// }
 		}
 		
 		isLoading = true;
@@ -316,6 +333,7 @@
 									id="state" 
 									bind:value={selectedState}
 									disabled={isLoading}
+									class="form-input"
 									class:error={addressErrors.state}
 								>
 									<option value={null}>Select State</option>
@@ -341,12 +359,24 @@
 									id="city" 
 									bind:value={selectedCity}
 									disabled={isLoading || !selectedState}
+									class="form-input"
 								>
-									<option value={null}>Select City</option>
+									<option value={null}>
+										{#if currentLang === 'ar'}
+											اختر المدينة
+										{:else}
+											Select City
+										{/if}
+									</option>
 									{#each cities as city}
 										<option value={city}>{getLocalizedName(city)}</option>
 									{/each}
 								</select>
+								{#if selectedCity}
+									<div class="selected-city-display">
+										<strong>Selected:</strong> {getLocalizedName(selectedCity)}
+									</div>
+								{/if}
 							</div>
 
 							<!-- Street Address -->
@@ -625,7 +655,8 @@
 	}
 
 	.form-input,
-	.form-textarea {
+	.form-textarea,
+	select.form-input {
 		padding: 0.75rem 1rem;
 		border: 2px solid var(--border-color, #e2e8f0);
 		border-radius: 8px;
@@ -633,26 +664,54 @@
 		background: var(--bg-primary, white);
 		color: var(--text-primary, #1e293b);
 		transition: all 0.3s ease;
+		appearance: none;
+		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+		background-position: right 0.5rem center;
+		background-repeat: no-repeat;
+		background-size: 1.5em 1.5em;
+		padding-right: 2.5rem;
 	}
 
 	.form-input:focus,
-	.form-textarea:focus {
+	.form-textarea:focus,
+	select.form-input:focus {
 		outline: none;
 		border-color: #3b82f6;
 		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 	}
 
 	.form-input:disabled,
-	.form-textarea:disabled {
+	.form-textarea:disabled,
+	select.form-input:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
+		background-color: var(--bg-secondary, #f8fafc);
+	}
+
+	.selected-city-display {
+		margin-top: 0.5rem;
+		padding: 0.5rem;
+		background: #f0f9ff;
+		border: 1px solid #0ea5e9;
+		border-radius: 6px;
+		color: #0c4a6e;
+		font-size: 0.875rem;
+	}
+
+	.selected-city-display strong {
+		color: #0369a1;
 	}
 
 	[data-theme="dark"] .form-input,
-	[data-theme="dark"] .form-textarea {
+	[data-theme="dark"] .form-textarea,
+	[data-theme="dark"] select.form-input {
 		background: var(--bg-secondary, #0f172a);
 		color: #f1f5f9;
 		border-color: var(--border-color, #334155);
+	}
+
+	[data-theme="dark"] select.form-input {
+		background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
 	}
 
 	.form-textarea {

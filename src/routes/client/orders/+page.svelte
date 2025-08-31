@@ -3,31 +3,56 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { ordersService } from '$lib/services/orders.js';
+	import Pagination from '$lib/components/Pagination.svelte';
 	
 	let orders = [];
 	let isLoading = false;
 	let statusFilter = 'all';
-	let currentPage = 1;
+	let currentPage = 0; // 0-based for API
 	let totalPages = 1;
+	let totalItems = 0;
 	let itemsPerPage = 10;
 	
-	// Get status filter from URL parameters
+	// Get status filter and page from URL parameters
 	$: if ($page.url.searchParams.has('status')) {
 		statusFilter = $page.url.searchParams.get('status') || 'all';
+	}
+	
+	$: if ($page.url.searchParams.has('page')) {
+		const urlPage = parseInt($page.url.searchParams.get('page') || '0');
+		if (urlPage !== currentPage) {
+			currentPage = urlPage;
+			loadOrders();
+		}
 	}
 	
 	async function loadOrders() {
 		isLoading = true;
 		try {
-			const response = await ordersService.getAllOrders();
+			const response = await ordersService.getAllOrders(currentPage, itemsPerPage);
 			orders = response.orders || response.results || response;
-			totalPages = Math.ceil(orders.length / itemsPerPage);
-			console.log(`Loaded ${response.total || orders.length} orders for current user`);
+			totalPages = response.totalPages || 1;
+			totalItems = response.total || 0;
+			console.log(`Loaded ${response.total || orders.length} orders for current user (page ${currentPage + 1})`);
+			console.log('Pagination debug:', { currentPage, totalPages, totalItems, itemsPerPage });
 		} catch (error) {
 			console.error('Failed to load orders:', error);
 		} finally {
 			isLoading = false;
 		}
+	}
+	
+	function handlePageChange(event) {
+		const newPage = event.detail.page;
+		currentPage = newPage;
+		
+		// Update URL with new page parameter
+		const url = new URL($page.url);
+		url.searchParams.set('page', newPage.toString());
+		url.searchParams.set('limit', itemsPerPage.toString());
+		goto(url.toString(), { replaceState: true });
+		
+		loadOrders();
 	}
 	
 	async function deleteOrder(orderId) {
@@ -90,6 +115,19 @@
 		const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
 		return matchesStatus;
 	});
+	
+	// Watch for status filter changes and reload data
+	$: if (statusFilter) {
+		// Reset to first page when filter changes
+		if (currentPage !== 0) {
+			currentPage = 0;
+			const url = new URL($page.url);
+			url.searchParams.set('page', '0');
+			url.searchParams.set('status', statusFilter);
+			goto(url.toString(), { replaceState: true });
+		}
+		loadOrders();
+	}
 	
 	onMount(() => {
 		loadOrders();
@@ -195,25 +233,17 @@
 			{/each}
 		</div>
 		
-		{#if totalPages > 1}
-			<div class="pagination">
-				<button 
-					class="btn btn-secondary"
-					disabled={currentPage === 1}
-					on:click={() => currentPage--}
-				>
-					Previous
-				</button>
-				<span class="page-info">Page {currentPage} of {totalPages}</span>
-				<button 
-					class="btn btn-secondary"
-					disabled={currentPage === totalPages}
-					on:click={() => currentPage++}
-				>
-					Next
-				</button>
-			</div>
-		{/if}
+		<!-- Pagination Component -->
+		<div style="margin: 2rem 0; padding: 1rem; background: #f8fafc; border-radius: 8px; font-size: 0.875rem;">
+			<strong>Debug Info:</strong> Page {currentPage + 1} of {totalPages} | Total: {totalItems} items | Per page: {itemsPerPage}
+		</div>
+		<Pagination 
+			{currentPage}
+			{totalPages}
+			{totalItems}
+			{itemsPerPage}
+			on:pageChange={handlePageChange}
+		/>
 	{/if}
 </div>
 

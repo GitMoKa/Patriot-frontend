@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { languageStore } from '$lib/stores/language.js';
 	
 	let orderId = '';
 	let order = null;
@@ -185,6 +186,17 @@
 	function closeItemModal() {
 		showItemModal = false;
 		selectedItem = null;
+	}
+	
+	// Helper function to get localized text
+	function getLocalizedText(textObj, fallback = 'N/A') {
+		if (!textObj) return fallback;
+		if (typeof textObj === 'string') return textObj;
+		
+		let currentLang = 'en';
+		languageStore.subscribe(lang => currentLang = lang)();
+		
+		return textObj[currentLang] || textObj.en || textObj.ar || fallback;
 	}
 	
 	onMount(() => {
@@ -461,7 +473,14 @@
 							<div class="item-detail-section">
 								<h4>Material</h4>
 								<div class="material-info">
-									<span>{selectedItem.material.name || 'Unknown Material'}</span>
+									<div class="material-name">
+										<strong>{getLocalizedText(selectedItem.material.name, 'Unknown Material')}</strong>
+									</div>
+									{#if selectedItem.material.description}
+										<div class="material-description">
+											{getLocalizedText(selectedItem.material.description)}
+										</div>
+									{/if}
 								</div>
 							</div>
 						{/if}
@@ -1184,6 +1203,17 @@
 		padding: 12px;
 		border-radius: 6px;
 		border: 1px solid #bae6fd;
+	}
+
+	.material-name {
+		margin-bottom: 8px;
+	}
+
+	.material-description {
+		font-size: 14px;
+		color: #0369a1;
+		line-height: 1.4;
+		font-style: italic;
 	}
 
 	.pattern-card-detail {

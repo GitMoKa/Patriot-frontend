@@ -48,9 +48,22 @@
     
     // Redirect based on notification type and recordId
     if (notification.type && notification.recordId) {
-      const redirectPath = `/client/${notification.type}s/${notification.recordId}`;
-      console.log('Redirecting to:', redirectPath);
-      goto(redirectPath);
+      if (notification.type === 'order') {
+        // For order notifications, redirect to the specific order page
+        const redirectPath = `/client/orders/${notification.recordId}`;
+        console.log('Redirecting to order:', redirectPath);
+        goto(redirectPath);
+      } else if (notification.type === 'product') {
+        // For product notifications, redirect to products page with product popup
+        const redirectPath = `/client/products?productId=${notification.recordId}`;
+        console.log('Redirecting to products page with product popup:', redirectPath);
+        goto(redirectPath);
+      } else {
+        // Fallback for other notification types
+        const redirectPath = `/client/${notification.type}s/${notification.recordId}`;
+        console.log('Redirecting to:', redirectPath);
+        goto(redirectPath);
+      }
       
       // Close the notification sidebar
       onClose();

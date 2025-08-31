@@ -6,156 +6,159 @@
 	import { themeStore } from '$lib/stores/theme.js';
 	import { authService } from '$lib/services/auth.js';
 	import { apiService } from '$lib/services/api.js';
-	import { imageUploadService } from '$lib/services/imageUpload.js';
+	import { statesService } from '$lib/services/states.js';
+	import { citiesService } from '$lib/services/cities.js';
 	
 	let formData = {
-		phone: '',
-		profilePhoto: null,
-		address: '' // Not implemented yet
+		address: {
+			street1: '',
+			street2: '',
+			postalCode: '',
+			apartment: '',
+			complex: ''
+		}
 	};
 	let isLoading = false;
 	let error = '';
-	let photoPreviewUrl = null;
-	let isUploadingPhoto = false;
+	
+	// Address-related data
+	let states = [];
+	let cities = [];
+	let selectedState = null;
+	let selectedCity = null;
 	
 	// Reactive statements
 	$: currentLang = $languageStore;
 	$: currentTheme = $themeStore;
 	$: isAuthenticated = $authStore.isAuthenticated;
 	
-	onMount(() => {
+	// Helper function to get localized name
+	function getLocalizedName(item) {
+		if (!item || !item.name) return '';
+		if (typeof item.name === 'string') return item.name;
+		
+		// Use current language preference, fallback to English, then Arabic
+		return item.name[currentLang] || item.name.en || item.name.ar || '';
+	}
+	
+	onMount(async () => {
 		// Check if user has access token (came from step 1)
 		if (!apiService.getAuthToken()) {
 			// No token found, redirect to step 1
 			goto('/client/signup/step1');
-		}
-	});
-	
-	async function handleSignupStep2() {
-		// Validation
-		if (!formData.phone) {
-			error = currentLang === 'ar' ? 'رقم الهاتف مطلوب' : 'Phone number is required';
 			return;
 		}
 		
-		if (!isValidPhone(formData.phone)) {
-			error = currentLang === 'ar' ? 'رقم الهاتف غير صحيح' : 'Invalid phone number';
-			return;
+		// Load states
+		try {
+			const statesResponse = await statesService.getAllStates();
+			states = statesResponse.results || statesResponse.states || statesResponse;
+		} catch (err) {
+			console.error('Failed to load states:', err);
+		}
+	});
+	
+	async function loadCitiesForState(stateId) {
+		try {
+			const citiesData = await citiesService.getCitiesByState(stateId);
+			cities = Array.isArray(citiesData) ? citiesData : [];
+		} catch (error) {
+			console.error('Failed to load cities:', error);
+			cities = [];
+		}
+	}
+
+	// Handle state selection
+	async function handleStateChange() {
+		if (selectedState) {
+			await loadCitiesForState(selectedState.id);
+			selectedCity = null; // Reset city selection when state changes
+		} else {
+			cities = [];
+			selectedCity = null;
+		}
+	}
+	
+	async function handleAddressStep() {
+		// Address is optional, but if any field is filled, validate required fields
+		const addressFields = formData.address;
+		const hasAnyAddressField = addressFields.street1 || addressFields.street2 || 
+			addressFields.postalCode || addressFields.apartment || addressFields.complex || 
+			selectedState || selectedCity;
+		
+		if (hasAnyAddressField) {
+			// Validation for required fields when address is provided
+			if (!selectedState) {
+				error = currentLang === 'ar' ? 'المحافظة مطلوبة عند تقديم معلومات العنوان' : 'State is required when providing address information';
+				return;
+			}
+			if (!addressFields.street1?.trim()) {
+				error = currentLang === 'ar' ? 'عنوان الشارع مطلوب عند تقديم معلومات العنوان' : 'Street address is required when providing address information';
+				return;
+			}
+			if (!addressFields.postalCode?.trim()) {
+				error = currentLang === 'ar' ? 'الرمز البريدي مطلوب عند تقديم معلومات العنوان' : 'Postal code is required when providing address information';
+				return;
+			}
 		}
 		
 		isLoading = true;
 		error = '';
 		
 		try {
-			let photoUrl = null;
-			
-			// Upload profile photo first if selected
-			if (formData.profilePhoto) {
-				try {
-					isUploadingPhoto = true;
-					
-					// Get current user to get userId
-					const currentUser = await authService.getMe();
-					
-					// Upload image and get clean URL
-					photoUrl = await imageUploadService.uploadImage(formData.profilePhoto, currentUser.id);
-					
-				} catch (photoError) {
-					console.error('Photo upload failed:', photoError);
-					// Don't fail the entire process if photo upload fails
-					error = currentLang === 'ar' 
-						? 'فشل في رفع الصورة، سيتم حفظ الملف الشخصي بدون صورة' 
-						: 'Photo upload failed, profile will be saved without photo';
-				} finally {
-					isUploadingPhoto = false;
+			// If address information is provided, update the user profile
+			if (hasAnyAddressField && selectedState) {
+				const updateData = {
+					address: {
+						stateId: selectedState.id,
+						state: selectedState,
+						street1: addressFields.street1?.trim(),
+						postalCode: addressFields.postalCode?.trim()
+					}
+				};
+				
+				// Add optional fields only if they have values
+				if (selectedCity) {
+					updateData.address.cityId = selectedCity.id;
+					updateData.address.city = selectedCity;
 				}
+				if (addressFields.street2?.trim()) {
+					updateData.address.street2 = addressFields.street2.trim();
+				}
+				if (addressFields.apartment?.trim()) {
+					updateData.address.apartment = addressFields.apartment.trim();
+				}
+				if (addressFields.complex?.trim()) {
+					updateData.address.complex = addressFields.complex.trim();
+				}
+				
+				console.log('Updating address with data:', updateData);
+				await authService.updateMe(updateData);
 			}
 			
-			// Update user profile with phone number and photo URL (if available)
-			const updateData = { phone: formData.phone };
-			if (photoUrl) {
-				updateData.photoUrl = photoUrl;
-			}
-			
-			console.log('Updating profile with data:', updateData);
-			await authService.updateMe(updateData);
-			
-			// Initialize auth store with user data
-			await authStore.init();
-			
-			// Redirect to home page
-			goto('/client');
+			// Proceed to step 3 (final step)
+			goto('/client/signup/step3');
 			
 		} catch (err) {
-			error = err.message || (currentLang === 'ar' ? 'فشل في تحديث الملف الشخصي' : 'Failed to update profile');
+			error = err.message || (currentLang === 'ar' ? 'فشل في حفظ العنوان' : 'Failed to save address');
 		} finally {
 			isLoading = false;
 		}
 	}
 	
-	function isValidPhone(phone) {
-		// Basic phone validation - adjust regex as needed
-		const phoneRegex = /^(?:\+963|0)9\d{8}$/;
-		return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
-	}
-	
 	function handleKeyPress(event) {
 		if (event.key === 'Enter') {
-			handleSignupStep2();
-		}
-	}
-	
-	function handlePhotoSelect(event) {
-		const file = event.target.files[0];
-		if (!file) return;
-		
-		try {
-			// Validate the image file
-			imageUploadService.validateImageFile(file);
-			
-			// Clean up previous preview URL
-			if (photoPreviewUrl) {
-				imageUploadService.revokePreviewUrl(photoPreviewUrl);
-			}
-			
-			// Set the file and create preview
-			formData.profilePhoto = file;
-			photoPreviewUrl = imageUploadService.createPreviewUrl(file);
-			error = ''; // Clear any previous errors
-			
-		} catch (validationError) {
-			error = validationError.message;
-			formData.profilePhoto = null;
-			if (photoPreviewUrl) {
-				imageUploadService.revokePreviewUrl(photoPreviewUrl);
-				photoPreviewUrl = null;
-			}
-		}
-	}
-	
-	function removePhoto() {
-		if (photoPreviewUrl) {
-			imageUploadService.revokePreviewUrl(photoPreviewUrl);
-		}
-		formData.profilePhoto = null;
-		photoPreviewUrl = null;
-		
-		// Reset the file input
-		const fileInput = document.getElementById('profilePhoto');
-		if (fileInput) {
-			fileInput.value = '';
+			handleAddressStep();
 		}
 	}
 	
 	function goBack() {
-		// Clean up preview URL
-		if (photoPreviewUrl) {
-			imageUploadService.revokePreviewUrl(photoPreviewUrl);
-		}
-		
-		// Clear tokens and go back to step 1
-		authService.logout();
 		goto('/client/signup/step1');
+	}
+	
+	function skipStep() {
+		// Skip address step and go directly to step 3
+		goto('/client/signup/step3');
 	}
 </script>
 
@@ -183,6 +186,8 @@
 				<div class="step completed">✓</div>
 				<div class="step-line completed"></div>
 				<div class="step active">2</div>
+				<div class="step-line"></div>
+				<div class="step">3</div>
 			</div>
 			
 			<!-- Title -->
@@ -190,7 +195,7 @@
 				{currentLang === 'ar' ? 'إنشاء حساب - الخطوة 2' : 'Create Account - Step 2'}
 			</h1>
 			<p class="page-subtitle">
-				{currentLang === 'ar' ? 'أكمل ملفك الشخصي' : 'Complete your profile'}
+				{currentLang === 'ar' ? 'أضف معلومات العنوان (اختياري)' : 'Add address information (optional)'}
 			</p>
 			
 			<!-- Error Message -->
@@ -200,81 +205,127 @@
 				</div>
 			{/if}
 			
-			<!-- Signup Form -->
-			<form class="form" on:submit|preventDefault={handleSignupStep2}>
-				<div class="form-group">
-					<label for="phone" class="form-label">
-						{currentLang === 'ar' ? 'رقم الهاتف' : 'Phone Number'} *
-					</label>
-					<input
-						type="tel"
-						id="phone"
-						bind:value={formData.phone}
-						class="form-input"
-						placeholder={currentLang === 'ar' ? 'أدخل رقم هاتفك' : 'Enter your phone number'}
-						required
-						disabled={isLoading}
-						on:keypress={handleKeyPress}
-					/>
-				</div>
-
-				<!-- Profile Photo -->
-				<div class="form-group">
-					<label for="profilePhoto" class="form-label">
-						{currentLang === 'ar' ? 'صورة الملف الشخصي' : 'Profile Photo'} 
-						<span style="font-weight: 400; color: var(--text-muted); font-size: 0.85rem;">({currentLang === 'ar' ? 'اختياري' : 'Optional'})</span>
-					</label>
-					
-					{#if photoPreviewUrl}
-						<div class="photo-preview">
-							<img src={photoPreviewUrl} alt="Profile preview" class="preview-image" />
-							<button 
-								type="button" 
-								class="remove-photo-btn"
-								on:click={removePhoto}
-								disabled={isLoading || isUploadingPhoto}
-							>
-								✕
-							</button>
-						</div>
-					{:else}
-						<div class="photo-upload-area">
-							<input
-								type="file"
-								id="profilePhoto"
-								accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-								on:change={handlePhotoSelect}
-								class="photo-input"
-								disabled={isLoading || isUploadingPhoto}
-							/>
-							<label for="profilePhoto" class="photo-upload-label">
-								<div class="photo-icon">📷</div>
-								<p class="upload-text">
-									{currentLang === 'ar' ? 'اضغط لاختيار صورة' : 'Click to select image'}
-								</p>
-								<p class="upload-hint">
-									{currentLang === 'ar' ? 'JPEG, PNG, GIF, WebP (حد أقصى 5MB)' : 'JPEG, PNG, GIF, WebP (Max 5MB)'}
-								</p>
+			<!-- Address Form -->
+			<form class="form" on:submit|preventDefault={handleAddressStep}>
+				<div class="address-section">
+					<div class="form-grid">
+						<!-- State Selection -->
+						<div class="form-group">
+							<label for="state" class="form-label">
+								{currentLang === 'ar' ? 'المحافظة' : 'State'}
 							</label>
+							<select 
+								id="state" 
+								bind:value={selectedState} 
+								on:change={handleStateChange}
+								class="form-input"
+								disabled={isLoading}
+							>
+								<option value={null}>{currentLang === 'ar' ? 'اختر المحافظة' : 'Select State'}</option>
+								{#each states as state}
+									<option value={state}>{getLocalizedName(state)}</option>
+								{/each}
+							</select>
 						</div>
-					{/if}
-				</div>
-
-				<!-- Address - Not implemented yet -->
-				<div class="form-group">
-					<label for="address" class="form-label">
-						{currentLang === 'ar' ? 'العنوان' : 'Address'} 
-						<span style="font-weight: 400; color: var(--text-muted); font-size: 0.85rem;">({currentLang === 'ar' ? 'اختياري - قريباً' : 'Optional - Coming Soon'})</span>
-					</label>
-					<textarea
-						id="address"
-						bind:value={formData.address}
-						class="form-input"
-						style="resize: vertical; min-height: 100px;"
-						placeholder={currentLang === 'ar' ? 'سيتم تفعيل هذا الحقل قريباً' : 'This field will be available soon'}
-						disabled={true}
-						rows="3"
-					></textarea>
+						
+						<!-- City Selection -->
+						<div class="form-group">
+							<label for="city" class="form-label">
+								{currentLang === 'ar' ? 'المدينة (اختياري)' : 'City (Optional)'}
+							</label>
+							<select 
+								id="city" 
+								bind:value={selectedCity}
+								class="form-input"
+								disabled={isLoading || !selectedState}
+							>
+								<option value={null}>{currentLang === 'ar' ? 'اختر المدينة' : 'Select City'}</option>
+								{#each cities as city}
+									<option value={city}>{getLocalizedName(city)}</option>
+								{/each}
+							</select>
+						</div>
+						
+						<!-- Street 1 -->
+						<div class="form-group">
+							<label for="street1" class="form-label">
+								{currentLang === 'ar' ? 'عنوان الشارع' : 'Street Address'}
+							</label>
+							<input
+								type="text"
+								id="street1"
+								bind:value={formData.address.street1}
+								class="form-input"
+								placeholder={currentLang === 'ar' ? 'شارع الملك فيصل 123' : '123 Main Street'}
+								disabled={isLoading}
+								on:keypress={handleKeyPress}
+							/>
+						</div>
+						
+						<!-- Street 2 -->
+						<div class="form-group">
+							<label for="street2" class="form-label">
+								{currentLang === 'ar' ? 'عنوان الشارع 2 (اختياري)' : 'Street Address 2 (Optional)'}
+							</label>
+							<input
+								type="text"
+								id="street2"
+								bind:value={formData.address.street2}
+								class="form-input"
+								placeholder={currentLang === 'ar' ? 'شقة، جناح، وحدة، إلخ' : 'Apt, Suite, Unit, etc.'}
+								disabled={isLoading}
+								on:keypress={handleKeyPress}
+							/>
+						</div>
+						
+						<!-- Postal Code -->
+						<div class="form-group">
+							<label for="postalCode" class="form-label">
+								{currentLang === 'ar' ? 'الرمز البريدي' : 'Postal Code'}
+							</label>
+							<input
+								type="text"
+								id="postalCode"
+								bind:value={formData.address.postalCode}
+								class="form-input"
+								placeholder={currentLang === 'ar' ? '12345' : '12345'}
+								disabled={isLoading}
+								on:keypress={handleKeyPress}
+							/>
+						</div>
+						
+						<!-- Apartment -->
+						<div class="form-group">
+							<label for="apartment" class="form-label">
+								{currentLang === 'ar' ? 'الشقة (اختياري)' : 'Apartment (Optional)'}
+							</label>
+							<input
+								type="text"
+								id="apartment"
+								bind:value={formData.address.apartment}
+								class="form-input"
+								placeholder={currentLang === 'ar' ? 'شقة 123' : 'Apt 123'}
+								disabled={isLoading}
+								on:keypress={handleKeyPress}
+							/>
+						</div>
+						
+						<!-- Complex -->
+						<div class="form-group">
+							<label for="complex" class="form-label">
+								{currentLang === 'ar' ? 'المجمع (اختياري)' : 'Complex (Optional)'}
+							</label>
+							<input
+								type="text"
+								id="complex"
+								bind:value={formData.address.complex}
+								class="form-input"
+								placeholder={currentLang === 'ar' ? 'اسم المبنى أو المجمع' : 'Building or Complex Name'}
+								disabled={isLoading}
+								on:keypress={handleKeyPress}
+							/>
+						</div>
+					</div>
 				</div>
 
 				<div class="form-actions">
@@ -289,19 +340,27 @@
 					</button>
 					
 					<button
+						type="button"
+						class="btn btn-outline"
+						style="flex: 1;"
+						on:click={skipStep}
+						disabled={isLoading}
+					>
+						{currentLang === 'ar' ? 'تخطي' : 'Skip'}
+					</button>
+					
+					<button
 						type="submit"
 						class="btn btn-primary btn-lg"
 						style="flex: 2;"
-						disabled={isLoading || isUploadingPhoto}
+						disabled={isLoading}
 					>
-						{#if isLoading || isUploadingPhoto}
+						{#if isLoading}
 							<span class="loading-spinner"></span>
 						{/if}
 						{isLoading 
 							? (currentLang === 'ar' ? 'جاري الحفظ...' : 'Saving...') 
-							: isUploadingPhoto
-							? (currentLang === 'ar' ? 'جاري رفع الصورة...' : 'Uploading photo...')
-							: (currentLang === 'ar' ? 'إنهاء التسجيل' : 'Complete Registration')
+							: (currentLang === 'ar' ? 'التالي' : 'Next')
 						}
 					</button>
 				</div>
@@ -310,4 +369,37 @@
 	</div>
 </div>
 
-
+<style>
+	.address-section {
+		width: 100%;
+	}
+	
+	.form-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1rem;
+	}
+	
+	@media (min-width: 768px) {
+		.form-grid {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+	
+	.form-actions {
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 1.5rem;
+	}
+	
+	.btn-outline {
+		background: transparent;
+		border: 1px solid var(--primary-color);
+		color: var(--primary-color);
+	}
+	
+	.btn-outline:hover {
+		background: var(--primary-color);
+		color: white;
+	}
+</style>

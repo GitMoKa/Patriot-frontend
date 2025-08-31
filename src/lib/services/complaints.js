@@ -7,7 +7,8 @@ export class ComplaintsService {
 			// Ensure only required fields are sent
 			const dataToSend = {
 				description: complaintData.description,
-				userId: complaintData.userId
+				userId: complaintData.userId,
+				complaintType: complaintData.complaintType
 			};
 
 			// Add file URL if provided (sent as "fileUrl" to match server expectation)
